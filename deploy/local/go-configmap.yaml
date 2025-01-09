@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: golang-server-config
+  namespace: development
+data:
+  PSQL_HOST: "192.168.49.2"
+  PSQL_DB_NAME: "horsemktdb"
+  PSQL_USERNAME: "horsemktuser"
+  PSQL_PORT: "30007"
+  PSQL_PASSWORD: "@EUZ29tmw-yr2jnZY8M@"

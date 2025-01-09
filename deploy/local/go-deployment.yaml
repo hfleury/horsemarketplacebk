@@ -1,0 +1,31 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: golang-server
+  namespace: development
+  labels:
+    app: golang-server
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: golang-server
+  template:
+    metadata:
+      labels:
+        app: golang-server
+    spec:
+      containers:
+      - name: golang-server
+        image: golang-server:latest
+        ports:
+        - containerPort: 8080
+        envFrom:
+        - configMapRef:
+            name: golang-server-config
+        volumeMounts:
+        - mountPath: /var/log/app
+          name: app-logs
+      volumes:
+      - name: app-logs
+        emptyDir: {} # Use a persistent volume for production
