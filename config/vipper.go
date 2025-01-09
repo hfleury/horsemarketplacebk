@@ -5,6 +5,7 @@ type PostgresConfig struct {
 	DdName   string `mapstructure:"psql_db_name"`
 	Username string `mapstructure:"psql_username"`
 	Port     string `mapstructure:"psql_port"`
+	Password string `mapstructure:"psql_password"`
 }
 
 type Configuration struct {
