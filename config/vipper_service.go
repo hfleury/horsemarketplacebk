@@ -7,14 +7,14 @@ import (
 )
 
 type VipperService struct {
-	Config *Configuration
+	Config *AllConfiguration
 }
 
 func NewVipperService() *VipperService {
 	viper.AutomaticEnv()
 	viper.SetDefault("environment", "development")
 	return &VipperService{
-		Config: &Configuration{},
+		Config: &AllConfiguration{},
 	}
 }
 
