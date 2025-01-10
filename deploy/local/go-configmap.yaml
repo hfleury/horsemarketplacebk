@@ -9,3 +9,4 @@ data:
   PSQL_USERNAME: "horsemktuser"
   PSQL_PORT: "30007"
   PSQL_PASSWORD: "@EUZ29tmw-yr2jnZY8M@"
+  PSQL_SSLMODE: "disable"

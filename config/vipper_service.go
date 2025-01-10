@@ -18,7 +18,7 @@ func NewVipperService() *VipperService {
 	}
 }
 
-func (vs *VipperService) GetAllConfiguration() {
+func (vs *VipperService) LoadConfiguration() {
 	if err := viper.Unmarshal(vs.Config); err != nil {
 		log.Fatalf("Error unmarshalling env variable: %v", err)
 	}
