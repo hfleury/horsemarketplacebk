@@ -2,25 +2,29 @@ package main
 
 import (
 	"context"
-	"net/http"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/hfleury/horsemarketplacebk/config"
+	"github.com/hfleury/horsemarketplacebk/internal/db"
 	"github.com/hfleury/horsemarketplacebk/internal/middleware"
 )
-
-// enviroment
-// database
-//
 
 func main() {
 	// Configuration
 	AppConfig := config.NewVipperService()
-	AppConfig.GetAllConfiguration()
+	AppConfig.LoadConfiguration()
 
 	// Logging
 	logger := config.NewZerologService()
+
+	// DB PSQL
+	db, err := db.NewPsqlDB(AppConfig.Config, *logger.Logger)
+	if err != nil {
+		logger.Logger.Fatal().Err(err).Msg("Error initialize the Postgres DB")
+	}
+	defer db.Close()
+
 	ctx := context.Background()
 
 	ctx = logger.WithTrace(ctx, uuid.New().String())
@@ -29,13 +33,6 @@ func main() {
 
 	server := gin.New()
 	server.Use(middleware.LoggerMiddleware(logger))
-
-	server.GET("/ping", func(c *gin.Context) {
-		ctx := c.Request.Context()
-		logger.Log(ctx, config.InfoLevel, "Ping endpoint hit", nil)
-
-		c.JSON(http.StatusOK, gin.H{"message": "Pong"})
-	})
 
 	if err := server.Run(":8080"); err != nil {
 		logger.Log(context.Background(), config.FatalLevel, "Server failed to start", map[string]any{
