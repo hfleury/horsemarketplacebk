@@ -7,6 +7,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/hfleury/horsemarketplacebk/config"
 	"github.com/hfleury/horsemarketplacebk/internal/db"
+	"github.com/hfleury/horsemarketplacebk/internal/handlers"
 	"github.com/hfleury/horsemarketplacebk/internal/middleware"
 )
 
@@ -33,6 +34,9 @@ func main() {
 
 	server := gin.New()
 	server.Use(middleware.LoggerMiddleware(logger))
+
+	// routes
+	server = handlers.SetupRouter()
 
 	if err := server.Run(":8080"); err != nil {
 		logger.Log(context.Background(), config.FatalLevel, "Server failed to start", map[string]any{
