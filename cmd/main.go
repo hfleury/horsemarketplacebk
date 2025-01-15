@@ -7,6 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/hfleury/horsemarketplacebk/config"
+	"github.com/hfleury/horsemarketplacebk/internal/auth/services"
 	"github.com/hfleury/horsemarketplacebk/internal/db"
 	"github.com/hfleury/horsemarketplacebk/internal/middleware"
 	"github.com/hfleury/horsemarketplacebk/internal/router"
@@ -27,15 +28,20 @@ func initializeApp(ctx context.Context, configService config.Configuration) (*gi
 	}
 	defer db.Close()
 
+	// Add the traceID to the logger
 	ctx = logger.WithTrace(ctx, uuid.New().String())
 
 	logger.Log(ctx, config.InfoLevel, "Application started and logging initialized", nil)
 
+	// Services
+	userService := services.NewUserService()
+
+	// Create the Gin router and add middleware
 	server := gin.New()
 	server.Use(middleware.LoggerMiddleware(logger))
 
 	// routes
-	server = router.SetupRouter(logger)
+	server = router.SetupRouter(logger, userService)
 
 	return server, nil
 }
