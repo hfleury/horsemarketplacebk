@@ -1,11 +1,14 @@
 package router
 
-import "github.com/gin-gonic/gin"
+import (
+	"github.com/gin-gonic/gin"
+	"github.com/hfleury/horsemarketplacebk/config"
+)
 
-func SetupRouter() *gin.Engine {
+func SetupRouter(logger config.Logging) *gin.Engine {
 	router := gin.Default()
 
-	registerUserRoutes(router)
+	registerUserRoutes(router, logger)
 
 	return router
 }
