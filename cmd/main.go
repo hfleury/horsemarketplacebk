@@ -8,8 +8,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/hfleury/horsemarketplacebk/config"
 	"github.com/hfleury/horsemarketplacebk/internal/db"
-	"github.com/hfleury/horsemarketplacebk/internal/handlers"
 	"github.com/hfleury/horsemarketplacebk/internal/middleware"
+	"github.com/hfleury/horsemarketplacebk/internal/router"
 )
 
 func initializeApp(ctx context.Context, configService config.Configuration) (*gin.Engine, error) {
@@ -35,7 +35,7 @@ func initializeApp(ctx context.Context, configService config.Configuration) (*gi
 	server.Use(middleware.LoggerMiddleware(logger))
 
 	// routes
-	server = handlers.SetupRouter()
+	server = router.SetupRouter()
 
 	return server, nil
 }
