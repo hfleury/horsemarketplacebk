@@ -23,3 +23,7 @@ func (vs *VipperService) LoadConfiguration() {
 		log.Fatalf("Error unmarshalling env variable: %v", err)
 	}
 }
+
+func (vs *VipperService) GetConfig() *AllConfiguration {
+	return vs.Config
+}

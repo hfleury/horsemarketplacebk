@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -11,22 +12,20 @@ import (
 	"github.com/hfleury/horsemarketplacebk/internal/middleware"
 )
 
-func main() {
+func initializeApp(ctx context.Context, configService config.Configuration) (*gin.Engine, error) {
 	// Configuration
-	AppConfig := config.NewVipperService()
-	AppConfig.LoadConfiguration()
+	configService.LoadConfiguration()
 
 	// Logging
 	logger := config.NewZerologService()
 
 	// DB PSQL
-	db, err := db.NewPsqlDB(AppConfig.Config, *logger.Logger)
+	db, err := db.NewPsqlDB(configService.GetConfig(), *logger.Logger)
 	if err != nil {
 		logger.Logger.Fatal().Err(err).Msg("Error initialize the Postgres DB")
+		return nil, err
 	}
 	defer db.Close()
-
-	ctx := context.Background()
 
 	ctx = logger.WithTrace(ctx, uuid.New().String())
 
@@ -38,10 +37,22 @@ func main() {
 	// routes
 	server = handlers.SetupRouter()
 
+	return server, nil
+}
+
+func main() {
+	ctx := context.Background()
+
+	configService := config.NewVipperService()
+
+	server, err := initializeApp(ctx, configService)
+	if err != nil {
+		panic("Failed to initialize application")
+	}
+
 	if err := server.Run(":8080"); err != nil {
-		logger.Log(context.Background(), config.FatalLevel, "Server failed to start", map[string]any{
-			"error": err.Error(),
-		})
+		fmt.Print(err)
+		panic("Failed to start server")
 	}
 
 }
