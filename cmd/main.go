@@ -35,7 +35,7 @@ func initializeApp(ctx context.Context, configService config.Configuration) (*gi
 	server.Use(middleware.LoggerMiddleware(logger))
 
 	// routes
-	server = router.SetupRouter()
+	server = router.SetupRouter(logger)
 
 	return server, nil
 }
@@ -54,5 +54,4 @@ func main() {
 		fmt.Print(err)
 		panic("Failed to start server")
 	}
-
 }
