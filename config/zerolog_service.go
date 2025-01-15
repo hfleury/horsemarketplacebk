@@ -33,6 +33,12 @@ func (zs *ZerologService) WithTrace(ctx context.Context, traceID string) context
 	return context.WithValue(ctx, "traceID", traceID)
 }
 
+func (zs *ZerologService) GetLoggerFromContext(c context.Context) Logging {
+	traceID, _ := c.Value("traceID").(string)
+	logger := zs.Logger.With().Str("trace_id", traceID).Logger()
+	return &ZerologService{Logger: &logger}
+}
+
 func (zs *ZerologService) getCallerInfo() (function string, line int) {
 	pc, _, line, ok := runtime.Caller(2)
 	if !ok {
