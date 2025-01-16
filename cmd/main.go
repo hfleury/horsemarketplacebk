@@ -7,6 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/hfleury/horsemarketplacebk/config"
+	"github.com/hfleury/horsemarketplacebk/internal/auth/repositories"
 	"github.com/hfleury/horsemarketplacebk/internal/auth/services"
 	"github.com/hfleury/horsemarketplacebk/internal/db"
 	"github.com/hfleury/horsemarketplacebk/internal/middleware"
@@ -33,8 +34,11 @@ func initializeApp(ctx context.Context, configService config.Configuration) (*gi
 
 	logger.Log(ctx, config.InfoLevel, "Application started and logging initialized", nil)
 
+	// Repositories
+	userRepo := repositories.NewUserRepoPsql(db, logger)
+
 	// Services
-	userService := services.NewUserService()
+	userService := services.NewUserService(userRepo, logger)
 
 	// Create the Gin router and add middleware
 	server := gin.New()
