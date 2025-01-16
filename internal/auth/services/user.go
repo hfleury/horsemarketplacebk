@@ -8,6 +8,7 @@ import (
 	"github.com/hfleury/horsemarketplacebk/config"
 	"github.com/hfleury/horsemarketplacebk/internal/auth/models"
 	"github.com/hfleury/horsemarketplacebk/internal/auth/repositories"
+	"golang.org/x/crypto/bcrypt"
 )
 
 type UserService struct {
@@ -67,6 +68,15 @@ func (us *UserService) CreateUser(ctx context.Context, userRequest models.UserRe
 		return nil, err
 	}
 
+	passHashed, err := us.hashPassword(ctx, *userRequest.PasswordHash)
+	if err != nil {
+		return nil, err
+	}
+
+	user.PasswordHash = &passHashed
+
+	// TODO call the insert function of the repo
+
 	return nil, nil
 }
 
@@ -94,6 +104,14 @@ func (us *UserService) validatePassword(password string) error {
 	return nil
 }
 
-func (us *UserService) hashPassword(password string) (string, error) {
+func (us *UserService) hashPassword(ctx context.Context, password string) (string, error) {
+	passwordHash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		us.logger.Log(ctx, config.ErrorLevel, "failed to hash password", map[string]any{
+			"Error": err.Error(),
+		})
+		return "", err
+	}
 
+	return string(passwordHash), nil
 }
