@@ -27,7 +27,6 @@ func initializeApp(ctx context.Context, configService config.Configuration) (*gi
 		logger.Logger.Fatal().Err(err).Msg("Error initialize the Postgres DB")
 		return nil, err
 	}
-	defer db.Close()
 
 	// Add the traceID to the logger
 	ctx = logger.WithTrace(ctx, uuid.New().String())
