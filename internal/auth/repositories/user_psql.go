@@ -20,7 +20,7 @@ func NewUserRepoPsql(psql db.Database, logger config.Logging) *UserRepoPsql {
 	}
 }
 
-func (ur *UserRepoPsql) Insert(user *models.User) (*models.User, error) {
+func (ur *UserRepoPsql) Insert(ctx context.Context, user *models.User) (*models.User, error) {
 	return nil, nil
 }
 
