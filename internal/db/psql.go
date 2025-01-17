@@ -17,14 +17,15 @@ type PsqlDB struct {
 
 func NewPsqlDB(config *config.AllConfiguration, logger zerolog.Logger) (*PsqlDB, error) {
 	connStr := fmt.Sprintf(
-		"user=%s password=%s dbname=%s host=%s port=%s sslmode=%s",
+		"user=%s password=%s dbname=%s host=%s port=%s sslmode=disable",
 		config.Psql.Username,
 		config.Psql.Password,
 		config.Psql.DdName,
 		config.Psql.Host,
 		config.Psql.Port,
-		config.Psql.SSLMode,
 	)
+
+	fmt.Println("Connecting to database with connection string:", connStr)
 
 	db, err := sql.Open("postgres", connStr)
 	if err != nil {
@@ -80,4 +81,9 @@ func (p *PsqlDB) Close() error {
 	}
 	p.Logg.Trace().Msg("Database connection closed successfully")
 	return nil
+}
+
+func (p *PsqlDB) QueryRow(ctx context.Context, query string, args ...any) *sql.Row {
+	p.Logg.Debug().Str("query", query).Msg("Executing query row")
+	return p.Conn.QueryRowContext(ctx, query, args...)
 }

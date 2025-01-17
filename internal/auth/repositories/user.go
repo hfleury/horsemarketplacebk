@@ -1,11 +1,13 @@
 package repositories
 
 import (
+	"context"
+
 	"github.com/hfleury/horsemarketplacebk/internal/auth/models"
-	"github.com/hfleury/horsemarketplacebk/internal/db"
 )
 
-type UserRepo struct {
-	psql *db.Database
-	User *models.User
+type UserRepository interface {
+	IsUsernameTaken(ctx context.Context, username string) (bool, error)
+	IsEmailTaken(ctx context.Context, email string) (bool, error)
+	Insert(ctx context.Context, user *models.User) (*models.User, error)
 }
