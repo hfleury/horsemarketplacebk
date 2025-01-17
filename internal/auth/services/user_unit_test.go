@@ -87,6 +87,156 @@ func TestCreateUser_fail_username_nil(t *testing.T) {
 	assert.Equal(t, "username and email cannot be empty", err.Error(), "Error message should match")
 }
 
+func TestCreateUser_fail_username_exist(t *testing.T) {
+	ctx := context.Background()
+	ctrl := gomock.NewController(t)
+
+	userRequest := models.UserResquest{
+		Username:     rtnStringPointer("unitTest"),
+		Email:        rtnStringPointer("unit@test.com"),
+		PasswordHash: rtnStringPointer("p4ssw[]rd"),
+	}
+
+	mockUserRepo := repositories.NewMockUserRepository(ctrl)
+	mockUserRepo.EXPECT().IsUsernameTaken(ctx, *userRequest.Username).Return(true, nil).Times(1)
+
+	mockZipperService := config.NewMockLogging(ctrl)
+	mockZipperService.EXPECT().Log(ctx, config.InfoLevel, "Username in use", map[string]any{
+		"Message": "Username in use",
+		"Data":    *userRequest.Username,
+	}).Times(1)
+
+	userService := NewUserService(mockUserRepo, mockZipperService)
+	rtnCreateUser, err := userService.CreateUser(ctx, userRequest)
+
+	assert.Error(t, err, "Expected an error for nil username")
+	assert.Nil(t, rtnCreateUser, "Expected result to be nil")
+	assert.Equal(t, "username or email already in use", err.Error(), "Error message should match")
+}
+
+func TestCreateUser_fail_email_nil(t *testing.T) {
+	ctx := context.Background()
+	ctrl := gomock.NewController(t)
+
+	userRequest := models.UserResquest{
+		Username:     rtnStringPointer("unitTest"),
+		Email:        nil,
+		PasswordHash: rtnStringPointer("p4ssw[]rd"),
+	}
+
+	mockUserRepo := repositories.NewMockUserRepository(ctrl)
+	mockUserRepo.EXPECT().IsUsernameTaken(ctx, *userRequest.Username).Return(false, nil).Times(1)
+
+	mockZipperService := config.NewMockLogging(ctrl)
+
+	userService := NewUserService(mockUserRepo, mockZipperService)
+	rtnCreateUser, err := userService.CreateUser(ctx, userRequest)
+
+	assert.Error(t, err, "Expected an error for nil username")
+	assert.Nil(t, rtnCreateUser, "Expected result to be nil")
+	assert.Equal(t, "username and email cannot be empty", err.Error(), "Error message should match")
+}
+
+func TestCreateUser_fail_email_exist(t *testing.T) {
+	ctx := context.Background()
+	ctrl := gomock.NewController(t)
+
+	userRequest := models.UserResquest{
+		Username:     rtnStringPointer("unitTest"),
+		Email:        rtnStringPointer("unit@test.com"),
+		PasswordHash: rtnStringPointer("p4ssw[]rd"),
+	}
+
+	mockUserRepo := repositories.NewMockUserRepository(ctrl)
+	mockUserRepo.EXPECT().IsUsernameTaken(ctx, *userRequest.Username).Return(false, nil).Times(1)
+	mockUserRepo.EXPECT().IsEmailTaken(ctx, *userRequest.Email).Return(true, nil).Times(1)
+
+	mockZipperService := config.NewMockLogging(ctrl)
+	mockZipperService.EXPECT().Log(ctx, config.InfoLevel, "Email in use", map[string]any{
+		"Message": "Email in use",
+		"Data":    *userRequest.Username,
+	}).Times(1)
+
+	userService := NewUserService(mockUserRepo, mockZipperService)
+	rtnCreateUser, err := userService.CreateUser(ctx, userRequest)
+
+	assert.Error(t, err, "Expected an error for nil username")
+	assert.Nil(t, rtnCreateUser, "Expected result to be nil")
+	assert.Equal(t, "username or email already in use", err.Error(), "Error message should match")
+}
+
+func TestCreateUser_fail_password_missing_specialchar(t *testing.T) {
+	ctx := context.Background()
+	ctrl := gomock.NewController(t)
+
+	userRequest := models.UserResquest{
+		Username:     rtnStringPointer("unitTest"),
+		Email:        rtnStringPointer("unit@test.com"),
+		PasswordHash: rtnStringPointer("p4sswrd"),
+	}
+
+	mockUserRepo := repositories.NewMockUserRepository(ctrl)
+	mockUserRepo.EXPECT().IsUsernameTaken(ctx, *userRequest.Username).Return(false, nil).Times(1)
+	mockUserRepo.EXPECT().IsEmailTaken(ctx, *userRequest.Email).Return(false, nil).Times(1)
+
+	mockZipperService := config.NewMockLogging(ctrl)
+
+	userService := NewUserService(mockUserRepo, mockZipperService)
+	rtnCreateUser, err := userService.CreateUser(ctx, userRequest)
+
+	assert.Error(t, err, "expect to have an error")
+	assert.Nil(t, rtnCreateUser, "Expected user to be nil")
+	assert.Equal(t, "password must contain at least one special character", err.Error(), "expect the message to be match")
+}
+
+func TestCreateUser_fail_password_missing_number(t *testing.T) {
+	ctx := context.Background()
+	ctrl := gomock.NewController(t)
+
+	userRequest := models.UserResquest{
+		Username:     rtnStringPointer("unitTest"),
+		Email:        rtnStringPointer("unit@test.com"),
+		PasswordHash: rtnStringPointer("psswrd"),
+	}
+
+	mockUserRepo := repositories.NewMockUserRepository(ctrl)
+	mockUserRepo.EXPECT().IsUsernameTaken(ctx, *userRequest.Username).Return(false, nil).Times(1)
+	mockUserRepo.EXPECT().IsEmailTaken(ctx, *userRequest.Email).Return(false, nil).Times(1)
+
+	mockZipperService := config.NewMockLogging(ctrl)
+
+	userService := NewUserService(mockUserRepo, mockZipperService)
+	rtnCreateUser, err := userService.CreateUser(ctx, userRequest)
+
+	assert.Error(t, err, "expect to have an error")
+	assert.Nil(t, rtnCreateUser, "Expected user to be nil")
+	assert.Equal(t, "password must contain at least one number", err.Error(), "expect the message to be match")
+}
+
+func TestCreateUser_fail_password_missing_letter(t *testing.T) {
+	ctx := context.Background()
+	ctrl := gomock.NewController(t)
+
+	userRequest := models.UserResquest{
+		Username:     rtnStringPointer("unitTest"),
+		Email:        rtnStringPointer("unit@test.com"),
+		PasswordHash: rtnStringPointer("[][44]"),
+	}
+
+	mockUserRepo := repositories.NewMockUserRepository(ctrl)
+	mockUserRepo.EXPECT().IsUsernameTaken(ctx, *userRequest.Username).Return(false, nil).Times(1)
+	mockUserRepo.EXPECT().IsEmailTaken(ctx, *userRequest.Email).Return(false, nil).Times(1)
+
+	mockZipperService := config.NewMockLogging(ctrl)
+
+	userService := NewUserService(mockUserRepo, mockZipperService)
+	rtnCreateUser, err := userService.CreateUser(ctx, userRequest)
+
+	assert.Error(t, err, "expect to have an error")
+	assert.Nil(t, rtnCreateUser, "Expected user to be nil")
+	assert.Equal(t, "password must contain at least one letter", err.Error(), "expect the message to be match")
+}
+
 func rtnStringPointer(str string) *string {
 	return &str
 }

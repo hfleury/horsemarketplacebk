@@ -38,7 +38,7 @@ func (us *UserService) CreateUser(ctx context.Context, userRequest models.UserRe
 				"Message": "Username in use",
 				"Data":    *userRequest.Username,
 			})
-			return nil, errors.New("Username or email already in use")
+			return nil, errors.New("username or email already in use")
 		}
 
 		user.Username = userRequest.Username
