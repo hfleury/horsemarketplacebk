@@ -12,11 +12,11 @@ import (
 )
 
 type UserService struct {
-	userRepo *repositories.UserRepoPsql
+	userRepo repositories.UserRepository
 	logger   config.Logging
 }
 
-func NewUserService(userRepo *repositories.UserRepoPsql, logger config.Logging) *UserService {
+func NewUserService(userRepo repositories.UserRepository, logger config.Logging) *UserService {
 	return &UserService{
 		userRepo: userRepo,
 		logger:   logger,
@@ -75,9 +75,12 @@ func (us *UserService) CreateUser(ctx context.Context, userRequest models.UserRe
 
 	user.PasswordHash = &passHashed
 
-	// TODO call the insert function of the repo
+	userCreated, err := us.userRepo.Insert(ctx, &user)
+	if err != nil {
+		return nil, err
+	}
 
-	return nil, nil
+	return userCreated, nil
 }
 
 func (us *UserService) validatePassword(password string) error {
