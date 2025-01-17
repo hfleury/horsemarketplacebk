@@ -21,7 +21,38 @@ func NewUserRepoPsql(psql db.Database, logger config.Logging) *UserRepoPsql {
 }
 
 func (ur *UserRepoPsql) Insert(ctx context.Context, user *models.User) (*models.User, error) {
-	return nil, nil
+	query := `
+		INSERT INTO authentic.users (username, email, password_hash)
+		VALUES
+		($1, $2, $3)
+		RETURNING id, username, email, password_hash, is_active, is_verified, last_login, created_at, updated_at;
+	`
+
+	err := ur.psql.QueryRow(ctx, query, user.Username, user.Email, user.PasswordHash).Scan(
+		&user.Id,
+		&user.Username,
+		&user.Email,
+		&user.PasswordHash,
+		&user.IsActive,
+		&user.IsVerified,
+		&user.LastLogin,
+		&user.CreatedAt,
+		&user.UpdatedAt,
+	)
+	if err != nil {
+		ur.logger.Log(ctx, config.ErrorLevel, "Failed to insert user", map[string]any{
+			"error": err.Error(),
+			"query": query,
+		})
+		return nil, err
+	}
+
+	ur.logger.Log(ctx, config.InfoLevel, "User inserted successfully", map[string]any{
+		"user_id": user.Id,
+	})
+
+	return user, nil
+
 }
 
 func (ur *UserRepoPsql) IsUsernameTaken(ctx context.Context, username string) (bool, error) {
