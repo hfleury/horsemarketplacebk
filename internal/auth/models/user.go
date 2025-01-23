@@ -18,8 +18,13 @@ type User struct {
 	UpdatedAt    *time.Time `json:"updated_at"`
 }
 
-type UserResquest struct {
+type UserCreateResquest struct {
 	Username     *string `json:"username"`
 	Email        *string `json:"email"`
 	PasswordHash *string `json:"password_hash"`
+}
+
+type UserGetRequest struct {
+	Username *string `json:"username"`
+	Email    *string `json:"email"`
 }
