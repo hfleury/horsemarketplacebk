@@ -23,7 +23,7 @@ func NewUserService(userRepo repositories.UserRepository, logger config.Logging)
 	}
 }
 
-func (us *UserService) CreateUser(ctx context.Context, userRequest models.UserResquest) (*models.User, error) {
+func (us *UserService) CreateUser(ctx context.Context, userRequest models.UserCreateResquest) (*models.User, error) {
 	user := models.User{}
 	if userRequest.Username == nil {
 		return nil, errors.New("username and email cannot be empty")
