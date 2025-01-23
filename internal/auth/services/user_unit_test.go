@@ -18,7 +18,7 @@ func TestCreateUser_success(t *testing.T) {
 	ctx := context.Background()
 	ctrl := gomock.NewController(t)
 
-	userRequest := models.UserResquest{
+	userRequest := models.UserCreateResquest{
 		Username:     rtnStringPointer("unitTest"),
 		Email:        rtnStringPointer("unit@test.com"),
 		PasswordHash: rtnStringPointer("p4ssw[]rd"),
@@ -70,7 +70,7 @@ func TestCreateUser_fail_username_nil(t *testing.T) {
 	ctx := context.Background()
 	ctrl := gomock.NewController(t)
 
-	userRequest := models.UserResquest{
+	userRequest := models.UserCreateResquest{
 		Username:     nil,
 		Email:        rtnStringPointer("unit@test.com"),
 		PasswordHash: rtnStringPointer("p4ssw[]rd"),
@@ -91,7 +91,7 @@ func TestCreateUser_fail_username_exist(t *testing.T) {
 	ctx := context.Background()
 	ctrl := gomock.NewController(t)
 
-	userRequest := models.UserResquest{
+	userRequest := models.UserCreateResquest{
 		Username:     rtnStringPointer("unitTest"),
 		Email:        rtnStringPointer("unit@test.com"),
 		PasswordHash: rtnStringPointer("p4ssw[]rd"),
@@ -118,7 +118,7 @@ func TestCreateUser_fail_email_nil(t *testing.T) {
 	ctx := context.Background()
 	ctrl := gomock.NewController(t)
 
-	userRequest := models.UserResquest{
+	userRequest := models.UserCreateResquest{
 		Username:     rtnStringPointer("unitTest"),
 		Email:        nil,
 		PasswordHash: rtnStringPointer("p4ssw[]rd"),
@@ -141,7 +141,7 @@ func TestCreateUser_fail_email_exist(t *testing.T) {
 	ctx := context.Background()
 	ctrl := gomock.NewController(t)
 
-	userRequest := models.UserResquest{
+	userRequest := models.UserCreateResquest{
 		Username:     rtnStringPointer("unitTest"),
 		Email:        rtnStringPointer("unit@test.com"),
 		PasswordHash: rtnStringPointer("p4ssw[]rd"),
@@ -169,7 +169,7 @@ func TestCreateUser_fail_password_missing_specialchar(t *testing.T) {
 	ctx := context.Background()
 	ctrl := gomock.NewController(t)
 
-	userRequest := models.UserResquest{
+	userRequest := models.UserCreateResquest{
 		Username:     rtnStringPointer("unitTest"),
 		Email:        rtnStringPointer("unit@test.com"),
 		PasswordHash: rtnStringPointer("p4sswrd"),
@@ -193,7 +193,7 @@ func TestCreateUser_fail_password_missing_number(t *testing.T) {
 	ctx := context.Background()
 	ctrl := gomock.NewController(t)
 
-	userRequest := models.UserResquest{
+	userRequest := models.UserCreateResquest{
 		Username:     rtnStringPointer("unitTest"),
 		Email:        rtnStringPointer("unit@test.com"),
 		PasswordHash: rtnStringPointer("psswrd"),
@@ -217,7 +217,7 @@ func TestCreateUser_fail_password_missing_letter(t *testing.T) {
 	ctx := context.Background()
 	ctrl := gomock.NewController(t)
 
-	userRequest := models.UserResquest{
+	userRequest := models.UserCreateResquest{
 		Username:     rtnStringPointer("unitTest"),
 		Email:        rtnStringPointer("unit@test.com"),
 		PasswordHash: rtnStringPointer("[][44]"),
