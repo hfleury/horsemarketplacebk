@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"errors"
+	"fmt"
 	"regexp"
 
 	"github.com/hfleury/horsemarketplacebk/config"
@@ -23,7 +24,7 @@ func NewUserService(userRepo repositories.UserRepository, logger config.Logging)
 	}
 }
 
-func (us *UserService) CreateUser(ctx context.Context, userRequest models.UserResquest) (*models.User, error) {
+func (us *UserService) CreateUser(ctx context.Context, userRequest models.UserCreateResquest) (*models.User, error) {
 	user := models.User{}
 	if userRequest.Username == nil {
 		return nil, errors.New("username and email cannot be empty")
@@ -81,6 +82,31 @@ func (us *UserService) CreateUser(ctx context.Context, userRequest models.UserRe
 	}
 
 	return userCreated, nil
+}
+
+func (us *UserService) SelectUserByUsername(ctx context.Context, user *models.UserGetRequest) (*models.User, error) {
+	if user.Email == nil && user.Username == nil {
+		return nil, errors.New("either username or email must be provided")
+	}
+
+	var modelUser *models.User
+	var err error
+
+	if user.Username != nil {
+		modelUser = &models.User{Username: user.Username}
+		modelUser, err = us.userRepo.SelectUserByUsername(ctx, modelUser)
+		if err != nil {
+			return nil, fmt.Errorf("error retrieving user by username: %w", err)
+		}
+	} else if user.Email != nil {
+		modelUser = &models.User{Email: user.Email}
+		modelUser, err = us.userRepo.SelectUserByEmail(ctx, modelUser)
+		if err != nil {
+			return nil, fmt.Errorf("error retrieving user by email: %w", err)
+		}
+	}
+
+	return modelUser, nil
 }
 
 func (us *UserService) validatePassword(password string) error {

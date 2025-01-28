@@ -10,4 +10,6 @@ type UserRepository interface {
 	IsUsernameTaken(ctx context.Context, username string) (bool, error)
 	IsEmailTaken(ctx context.Context, email string) (bool, error)
 	Insert(ctx context.Context, user *models.User) (*models.User, error)
+	SelectUserByUsername(ctx context.Context, user *models.User) (*models.User, error)
+	SelectUserByEmail(ctx context.Context, user *models.User) (*models.User, error)
 }

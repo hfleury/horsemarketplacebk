@@ -13,5 +13,6 @@ func registerUserRoutes(router *gin.Engine, logger config.Logging, userService *
 	authRoutes := router.Group("/auth")
 	{
 		authRoutes.POST("/user", userHandler.CreateUser)
+		authRoutes.GET("/users", userHandler.GetUserByUsername)
 	}
 }
