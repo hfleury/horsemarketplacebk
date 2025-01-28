@@ -28,3 +28,8 @@ type UserGetRequest struct {
 	Username *string `json:"username"`
 	Email    *string `json:"email"`
 }
+
+type UserLogin struct {
+	Username     *string `json:"username"`
+	PasswordHash *string `json:"password_hash"`
+}
