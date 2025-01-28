@@ -79,3 +79,33 @@ func (mr *MockUserRepositoryMockRecorder) IsUsernameTaken(ctx, username interfac
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsUsernameTaken", reflect.TypeOf((*MockUserRepository)(nil).IsUsernameTaken), ctx, username)
 }
+
+// SelectUserByEmail mocks base method.
+func (m *MockUserRepository) SelectUserByEmail(ctx context.Context, user *models.User) (*models.User, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SelectUserByEmail", ctx, user)
+	ret0, _ := ret[0].(*models.User)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// SelectUserByEmail indicates an expected call of SelectUserByEmail.
+func (mr *MockUserRepositoryMockRecorder) SelectUserByEmail(ctx, user interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SelectUserByEmail", reflect.TypeOf((*MockUserRepository)(nil).SelectUserByEmail), ctx, user)
+}
+
+// SelectUserByUsername mocks base method.
+func (m *MockUserRepository) SelectUserByUsername(ctx context.Context, user *models.User) (*models.User, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SelectUserByUsername", ctx, user)
+	ret0, _ := ret[0].(*models.User)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// SelectUserByUsername indicates an expected call of SelectUserByUsername.
+func (mr *MockUserRepositoryMockRecorder) SelectUserByUsername(ctx, user interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SelectUserByUsername", reflect.TypeOf((*MockUserRepository)(nil).SelectUserByUsername), ctx, user)
+}

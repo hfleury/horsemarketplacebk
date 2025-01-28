@@ -81,7 +81,7 @@ func (h *UserHandler) GetUserByUsername(c *gin.Context) {
 		return
 	}
 
-	user, err := h.userService.SelectUserByUsername(c.Request.Context(), userRequest)
+	user, err := h.userService.SelectUserByUsername(c.Request.Context(), &userRequest)
 	if err != nil {
 		logger.Log(c, config.ErrorLevel, "Failed to get user by username", map[string]any{
 			"error": err.Error(),
