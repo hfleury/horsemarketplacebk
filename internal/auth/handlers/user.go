@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"net/http"
-	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/hfleury/horsemarketplacebk/config"
@@ -12,16 +11,14 @@ import (
 )
 
 type UserHandler struct {
-	logger       config.Logging
-	userService  *services.UserService
-	tokenService *services.TokenService
+	logger      config.Logging
+	userService *services.UserService
 }
 
-func NewUserHandler(logger config.Logging, userService *services.UserService, tokenService *services.TokenService) *UserHandler {
+func NewUserHandler(logger config.Logging, userService *services.UserService) *UserHandler {
 	return &UserHandler{
-		logger:       logger,
-		userService:  userService,
-		tokenService: tokenService,
+		logger:      logger,
+		userService: userService,
 	}
 }
 
@@ -122,7 +119,7 @@ func (h *UserHandler) Login(c *gin.Context) {
 		return
 	}
 
-	user, err := h.userService.Login(c.Request.Context(), userRequest)
+	user, token, err := h.userService.Login(c.Request.Context(), userRequest)
 	if err != nil {
 		logger.Log(c, config.ErrorLevel, "Failed to login", map[string]any{
 			"error": err.Error(),
@@ -134,21 +131,10 @@ func (h *UserHandler) Login(c *gin.Context) {
 		return
 	}
 
-	token, err := h.tokenService.CreateToken(*user.Username, 24*time.Hour)
-	if err != nil {
-		logger.Log(c, config.ErrorLevel, "Failed to create token", map[string]any{
-			"error": err.Error(),
-		})
-
-		response.Status = "error"
-		response.Message = "Failed to create token"
-		c.JSON(http.StatusInternalServerError, response)
-		return
-	}
-
 	response.Status = "success"
 	response.Message = "Login successful"
-	response.Data = map[string]string{
+	response.Data = map[string]any{
+		"user":  user,
 		"token": token,
 	}
 
