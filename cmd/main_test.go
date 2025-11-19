@@ -24,7 +24,7 @@ func TestInitializeApp(t *testing.T) {
 			Port:     "5432",
 			SSLMode:  "disable",
 		},
-	}).Times(1)
+	}).Times(2)
 
 	ctx := context.Background()
 
