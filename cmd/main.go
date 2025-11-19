@@ -38,13 +38,14 @@ func initializeApp(ctx context.Context, configService config.Configuration) (*gi
 
 	// Services
 	userService := services.NewUserService(userRepo, logger)
+	tokenService := services.NewTokenService(configService.GetConfig(), logger)
 
 	// Create the Gin router and add middleware
 	server := gin.New()
 	server.Use(middleware.LoggerMiddleware(logger))
 
 	// routes
-	server = router.SetupRouter(logger, userService)
+	server = router.SetupRouter(logger, userService, tokenService)
 
 	return server, nil
 }
