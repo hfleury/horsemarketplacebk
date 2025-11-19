@@ -12,9 +12,16 @@ import (
 	"github.com/hfleury/horsemarketplacebk/internal/db"
 	"github.com/hfleury/horsemarketplacebk/internal/middleware"
 	"github.com/hfleury/horsemarketplacebk/internal/router"
+	"github.com/rs/zerolog"
 )
 
-func initializeApp(ctx context.Context, configService config.Configuration) (*gin.Engine, error) {
+type dbFactory func(config *config.AllConfiguration, logger zerolog.Logger) (*db.PsqlDB, error)
+
+type Server interface {
+	Run(addr ...string) error
+}
+
+func initializeApp(ctx context.Context, configService config.Configuration, newDB dbFactory) (Server, error) {
 	// Configuration
 	configService.LoadConfiguration()
 
@@ -22,9 +29,9 @@ func initializeApp(ctx context.Context, configService config.Configuration) (*gi
 	logger := config.NewZerologService()
 
 	// DB PSQL
-	db, err := db.NewPsqlDB(configService.GetConfig(), *logger.Logger)
+	db, err := newDB(configService.GetConfig(), *logger.Logger)
 	if err != nil {
-		logger.Logger.Fatal().Err(err).Msg("Error initialize the Postgres DB")
+		logger.Logger.Error().Err(err).Msg("Error initialize the Postgres DB")
 		return nil, err
 	}
 
@@ -50,18 +57,27 @@ func initializeApp(ctx context.Context, configService config.Configuration) (*gi
 	return server, nil
 }
 
-func main() {
-	ctx := context.Background()
+var initializeAppFunc = initializeApp
 
-	configService := config.NewVipperService()
-
-	server, err := initializeApp(ctx, configService)
+func run(ctx context.Context, configService config.Configuration, newDB dbFactory) error {
+	server, err := initializeAppFunc(ctx, configService, newDB)
 	if err != nil {
-		panic("Failed to initialize application")
+		return err
 	}
 
 	if err := server.Run(":8080"); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func main() {
+	ctx := context.Background()
+	configService := config.NewVipperService()
+
+	if err := run(ctx, configService, db.NewPsqlDB); err != nil {
 		fmt.Print(err)
-		panic("Failed to start server")
+		panic("Application failed")
 	}
 }
