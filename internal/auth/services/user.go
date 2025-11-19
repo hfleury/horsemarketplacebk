@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"time"
 
 	"github.com/hfleury/horsemarketplacebk/config"
 	"github.com/hfleury/horsemarketplacebk/internal/auth/models"
@@ -13,14 +14,16 @@ import (
 )
 
 type UserService struct {
-	userRepo repositories.UserRepository
-	logger   config.Logging
+	userRepo     repositories.UserRepository
+	logger       config.Logging
+	tokenService *TokenService
 }
 
-func NewUserService(userRepo repositories.UserRepository, logger config.Logging) *UserService {
+func NewUserService(userRepo repositories.UserRepository, logger config.Logging, tokenService *TokenService) *UserService {
 	return &UserService{
-		userRepo: userRepo,
-		logger:   logger,
+		userRepo:     userRepo,
+		logger:       logger,
+		tokenService: tokenService,
 	}
 }
 
@@ -145,21 +148,26 @@ func (us *UserService) hashPassword(ctx context.Context, password string) (strin
 	return string(passwordHash), nil
 }
 
-func (us *UserService) Login(ctx context.Context, userLogin models.UserLogin) (*models.User, error) {
+func (us *UserService) Login(ctx context.Context, userLogin models.UserLogin) (*models.User, string, error) {
 	if userLogin.Username == nil || userLogin.PasswordHash == nil {
-		return nil, errors.New("username and password must be provided")
+		return nil, "", errors.New("username and password must be provided")
 	}
 
 	user := &models.User{Username: userLogin.Username}
 	user, err := us.userRepo.SelectUserByUsername(ctx, user)
 	if err != nil {
-		return nil, errors.New("invalid credentials")
+		return nil, "", errors.New("invalid credentials")
 	}
 
 	err = bcrypt.CompareHashAndPassword([]byte(*user.PasswordHash), []byte(*userLogin.PasswordHash))
 	if err != nil {
-		return nil, errors.New("invalid credentials")
+		return nil, "", errors.New("invalid credentials")
 	}
 
-	return user, nil
+	token, err := us.tokenService.CreateToken(*user.Username, 24*time.Hour)
+	if err != nil {
+		return nil, "", err
+	}
+
+	return user, token, nil
 }
