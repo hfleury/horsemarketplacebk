@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/hfleury/horsemarketplacebk/config"
@@ -11,14 +12,16 @@ import (
 )
 
 type UserHandler struct {
-	logger      config.Logging
-	userService *services.UserService
+	logger       config.Logging
+	userService  *services.UserService
+	tokenService *services.TokenService
 }
 
-func NewUserHandler(logger config.Logging, userService *services.UserService) *UserHandler {
+func NewUserHandler(logger config.Logging, userService *services.UserService, tokenService *services.TokenService) *UserHandler {
 	return &UserHandler{
-		logger:      logger,
-		userService: userService,
+		logger:       logger,
+		userService:  userService,
+		tokenService: tokenService,
 	}
 }
 
@@ -103,7 +106,7 @@ func (h *UserHandler) GetUserByUsername(c *gin.Context) {
 func (h *UserHandler) Login(c *gin.Context) {
 	logger := h.logger.GetLoggerFromContext(c)
 	response := common.APIResponse{}
-	userRequest := models.UserLoglin{}
+	userRequest := models.UserLogin{}
 
 	if err := c.ShouldBindJSON(&userRequest); err != nil {
 		requestBody, _ := c.Get("request_body")
@@ -119,5 +122,35 @@ func (h *UserHandler) Login(c *gin.Context) {
 		return
 	}
 
-	// TODO Login service - Check if username and password is correct, create the token using PASETO pass it back
+	user, err := h.userService.Login(c.Request.Context(), userRequest)
+	if err != nil {
+		logger.Log(c, config.ErrorLevel, "Failed to login", map[string]any{
+			"error": err.Error(),
+		})
+
+		response.Status = "error"
+		response.Message = "Invalid credentials"
+		c.JSON(http.StatusUnauthorized, response)
+		return
+	}
+
+	token, err := h.tokenService.CreateToken(*user.Username, 24*time.Hour)
+	if err != nil {
+		logger.Log(c, config.ErrorLevel, "Failed to create token", map[string]any{
+			"error": err.Error(),
+		})
+
+		response.Status = "error"
+		response.Message = "Failed to create token"
+		c.JSON(http.StatusInternalServerError, response)
+		return
+	}
+
+	response.Status = "success"
+	response.Message = "Login successful"
+	response.Data = map[string]string{
+		"token": token,
+	}
+
+	c.JSON(http.StatusOK, response)
 }
