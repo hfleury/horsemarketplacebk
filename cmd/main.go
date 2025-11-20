@@ -59,6 +59,8 @@ func initializeApp(ctx context.Context, configService config.Configuration, newD
 
 var initializeAppFunc = initializeApp
 
+var runFunc = run
+
 func run(ctx context.Context, configService config.Configuration, newDB dbFactory) error {
 	server, err := initializeAppFunc(ctx, configService, newDB)
 	if err != nil {
@@ -76,7 +78,7 @@ func main() {
 	ctx := context.Background()
 	configService := config.NewVipperService()
 
-	if err := run(ctx, configService, db.NewPsqlDB); err != nil {
+	if err := runFunc(ctx, configService, db.NewPsqlDB); err != nil {
 		fmt.Print(err)
 		panic("Application failed")
 	}
