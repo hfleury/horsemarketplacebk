@@ -80,7 +80,7 @@ func (m *MockServer) Run(addr ...string) error {
 	return m.RunFunc(addr...)
 }
 
-func TestRun(t *testing.T) {
+func TestLauncher_Run(t *testing.T) {
 	ctrl := gomock.NewController(t)
 
 	mockConfig := config.NewMockConfiguration(ctrl)
@@ -94,26 +94,24 @@ func TestRun(t *testing.T) {
 		return &db.PsqlDB{}, nil
 	}
 
-	// Mock initializeAppFunc
-	originalInitializeAppFunc := initializeAppFunc
-	defer func() { initializeAppFunc = originalInitializeAppFunc }()
-
 	mockServer := &MockServer{
 		RunFunc: func(addr ...string) error {
 			return nil
 		},
 	}
 
-	initializeAppFunc = func(ctx context.Context, configService config.Configuration, newDB dbFactory) (Server, error) {
-		return mockServer, nil
+	launcher := &Launcher{
+		AppInitializer: func(ctx context.Context, configService config.Configuration, newDB dbFactory) (Server, error) {
+			return mockServer, nil
+		},
 	}
 
-	err := run(ctx, mockConfig, mockDBFactory)
+	err := launcher.Run(ctx, mockConfig, mockDBFactory)
 
 	assert.NoError(t, err)
 }
 
-func TestRun_InitializeAppError(t *testing.T) {
+func TestLauncher_Run_InitializeAppError(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mockConfig := config.NewMockConfiguration(ctrl)
 	ctx := context.Background()
@@ -121,29 +119,25 @@ func TestRun_InitializeAppError(t *testing.T) {
 		return &db.PsqlDB{}, nil
 	}
 
-	originalInitializeAppFunc := initializeAppFunc
-	defer func() { initializeAppFunc = originalInitializeAppFunc }()
-
-	initializeAppFunc = func(ctx context.Context, configService config.Configuration, newDB dbFactory) (Server, error) {
-		return nil, errors.New("init error")
+	launcher := &Launcher{
+		AppInitializer: func(ctx context.Context, configService config.Configuration, newDB dbFactory) (Server, error) {
+			return nil, errors.New("init error")
+		},
 	}
 
-	err := run(ctx, mockConfig, mockDBFactory)
+	err := launcher.Run(ctx, mockConfig, mockDBFactory)
 
 	assert.Error(t, err)
 	assert.Equal(t, "init error", err.Error())
 }
 
-func TestRun_ServerRunError(t *testing.T) {
+func TestLauncher_Run_ServerRunError(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mockConfig := config.NewMockConfiguration(ctrl)
 	ctx := context.Background()
 	mockDBFactory := func(config *config.AllConfiguration, logger zerolog.Logger) (*db.PsqlDB, error) {
 		return &db.PsqlDB{}, nil
 	}
-
-	originalInitializeAppFunc := initializeAppFunc
-	defer func() { initializeAppFunc = originalInitializeAppFunc }()
 
 	mockServer := &MockServer{
 		RunFunc: func(addr ...string) error {
@@ -151,34 +145,14 @@ func TestRun_ServerRunError(t *testing.T) {
 		},
 	}
 
-	initializeAppFunc = func(ctx context.Context, configService config.Configuration, newDB dbFactory) (Server, error) {
-		return mockServer, nil
+	launcher := &Launcher{
+		AppInitializer: func(ctx context.Context, configService config.Configuration, newDB dbFactory) (Server, error) {
+			return mockServer, nil
+		},
 	}
 
-	err := run(ctx, mockConfig, mockDBFactory)
+	err := launcher.Run(ctx, mockConfig, mockDBFactory)
 
 	assert.Error(t, err)
 	assert.Equal(t, "run error", err.Error())
-}
-
-func TestMainFunc(t *testing.T) {
-	// Mock runFunc
-	originalRunFunc := runFunc
-	defer func() { runFunc = originalRunFunc }()
-
-	// Test success
-	runFunc = func(ctx context.Context, configService config.Configuration, newDB dbFactory) error {
-		return nil
-	}
-	assert.NotPanics(t, func() {
-		main()
-	})
-
-	// Test failure
-	runFunc = func(ctx context.Context, configService config.Configuration, newDB dbFactory) error {
-		return errors.New("main error")
-	}
-	assert.PanicsWithValue(t, "Application failed", func() {
-		main()
-	})
 }
