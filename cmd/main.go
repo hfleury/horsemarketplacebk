@@ -27,6 +27,7 @@ func initializeApp(ctx context.Context, configService config.Configuration, newD
 
 	// Logging
 	logger := config.NewZerologService()
+	logger.Logger.Debug().Msg("Logger initialized")
 
 	// DB PSQL
 	db, err := newDB(configService.GetConfig(), *logger.Logger)
@@ -52,17 +53,17 @@ func initializeApp(ctx context.Context, configService config.Configuration, newD
 	server.Use(middleware.LoggerMiddleware(logger))
 
 	// routes
-	server = router.SetupRouter(logger, userService)
+	server = router.SetupRouter(server, logger, userService)
 
 	return server, nil
 }
 
-var initializeAppFunc = initializeApp
+type Launcher struct {
+	AppInitializer func(context.Context, config.Configuration, dbFactory) (Server, error)
+}
 
-var runFunc = run
-
-func run(ctx context.Context, configService config.Configuration, newDB dbFactory) error {
-	server, err := initializeAppFunc(ctx, configService, newDB)
+func (l *Launcher) Run(ctx context.Context, configService config.Configuration, newDB dbFactory) error {
+	server, err := l.AppInitializer(ctx, configService, newDB)
 	if err != nil {
 		return err
 	}
@@ -78,7 +79,11 @@ func main() {
 	ctx := context.Background()
 	configService := config.NewVipperService()
 
-	if err := runFunc(ctx, configService, db.NewPsqlDB); err != nil {
+	launcher := &Launcher{
+		AppInitializer: initializeApp,
+	}
+
+	if err := launcher.Run(ctx, configService, db.NewPsqlDB); err != nil {
 		fmt.Print(err)
 		panic("Application failed")
 	}
