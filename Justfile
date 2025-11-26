@@ -6,7 +6,7 @@ minikube-start:
 
 # Build docker image inside minikube
 docker-build:
-    eval $(minikube docker-env) && docker build -t horsemarketplacebk:latest -f deploy/local/Dockerfile .
+    eval $(minikube docker-env) && docker build -t hfcardoso/golang-server:latest -f deploy/local/Dockerfile .
 
 # Apply kubernetes manifests
 k8s-apply:
@@ -44,3 +44,7 @@ test-coverage:
 test:
     go test ./...
 
+
+# Update minikube deployment
+update-minikube: docker-build
+    kubectl rollout restart deployment golang-server -n development
