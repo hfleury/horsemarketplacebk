@@ -247,7 +247,7 @@ func (h *UserHandler) Refresh(c *gin.Context) {
 		token = *body.RefreshToken
 	}
 
-	accessToken, err := h.userService.Refresh(c.Request.Context(), token)
+	accessToken, newRefresh, newExpiry, err := h.userService.Refresh(c.Request.Context(), token)
 	if err != nil {
 		logger.Log(c, config.ErrorLevel, "Failed to refresh token", map[string]any{
 			"error": err.Error(),
@@ -256,6 +256,24 @@ func (h *UserHandler) Refresh(c *gin.Context) {
 		response.Message = "Invalid or expired refresh token"
 		c.JSON(http.StatusUnauthorized, response)
 		return
+	}
+
+	// rotate cookie with new refresh token
+	if newRefresh != "" {
+		secure := false
+		if os.Getenv("ENVIRONMENT") == "production" {
+			secure = true
+		}
+		maxAge := 0
+		if newExpiry != "" {
+			if t, err := time.Parse(time.RFC3339, newExpiry); err == nil {
+				maxAge = int(time.Until(t).Seconds())
+				if maxAge < 0 {
+					maxAge = 0
+				}
+			}
+		}
+		c.SetCookie("refresh_token", newRefresh, maxAge, "/", "", secure, true)
 	}
 
 	response.Status = "success"

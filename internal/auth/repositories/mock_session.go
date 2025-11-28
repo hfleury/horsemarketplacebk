@@ -78,3 +78,31 @@ func (mr *MockSessionRepositoryMockRecorder) Revoke(ctx, sessionToken interface{
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Revoke", reflect.TypeOf((*MockSessionRepository)(nil).Revoke), ctx, sessionToken)
 }
+
+// RevokeAllForUser mocks base method.
+func (m *MockSessionRepository) RevokeAllForUser(ctx context.Context, userID string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "RevokeAllForUser", ctx, userID)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// RevokeAllForUser indicates an expected call of RevokeAllForUser.
+func (mr *MockSessionRepositoryMockRecorder) RevokeAllForUser(ctx, userID interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RevokeAllForUser", reflect.TypeOf((*MockSessionRepository)(nil).RevokeAllForUser), ctx, userID)
+}
+
+// Rotate mocks base method.
+func (m *MockSessionRepository) Rotate(ctx context.Context, userID string, oldToken string, newToken string, newExpiry string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Rotate", ctx, userID, oldToken, newToken, newExpiry)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Rotate indicates an expected call of Rotate.
+func (mr *MockSessionRepositoryMockRecorder) Rotate(ctx, userID, oldToken, newToken, newExpiry interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Rotate", reflect.TypeOf((*MockSessionRepository)(nil).Rotate), ctx, userID, oldToken, newToken, newExpiry)
+}
