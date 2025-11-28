@@ -21,7 +21,7 @@ type User struct {
 type UserCreateResquest struct {
 	Username     *string `json:"username"`
 	Email        *string `json:"email"`
-	PasswordHash *string `json:"password_hash"`
+	PasswordHash *string `json:"password"`
 }
 
 type UserGetRequest struct {
@@ -31,5 +31,5 @@ type UserGetRequest struct {
 
 type UserLogin struct {
 	Username     *string `json:"username"`
-	PasswordHash *string `json:"password_hash"`
+	PasswordHash *string `json:"password"`
 }
