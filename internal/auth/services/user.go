@@ -228,24 +228,28 @@ func (us *UserService) Logout(ctx context.Context, refreshToken string) error {
 }
 
 // Refresh issues a new access token given a valid refresh token
-func (us *UserService) Refresh(ctx context.Context, refreshToken string) (string, error) {
+func (us *UserService) Refresh(ctx context.Context, refreshToken string) (string, string, string, error) {
 	if us.sessionRepo == nil {
-		return "", errors.New("session repository not configured")
+		return "", "", "", errors.New("session repository not configured")
 	}
 
 	userID, isActive, expiresAt, err := us.sessionRepo.Validate(ctx, refreshToken)
 	if err != nil {
-		return "", errors.New("invalid refresh token")
+		return "", "", "", errors.New("invalid refresh token")
 	}
 	if !isActive {
-		return "", errors.New("refresh token not active")
+		// possible token reuse: revoke all sessions for this user and require re-login
+		if revokeErr := us.sessionRepo.RevokeAllForUser(ctx, userID); revokeErr != nil {
+			us.logger.Log(ctx, config.ErrorLevel, "failed to revoke all sessions after token reuse", map[string]any{"error": revokeErr.Error()})
+		}
+		return "", "", "", errors.New("refresh token reuse detected; all sessions revoked")
 	}
 
 	// check expiry
 	if expiresAt != "" {
 		if t, err := time.Parse(time.RFC3339, expiresAt); err == nil {
 			if t.Before(time.Now().UTC()) {
-				return "", errors.New("refresh token expired")
+				return "", "", "", errors.New("refresh token expired")
 			}
 		}
 	}
@@ -253,13 +257,21 @@ func (us *UserService) Refresh(ctx context.Context, refreshToken string) (string
 	// Load user details to include in new token
 	user, err := us.userRepo.SelectUserByID(ctx, userID)
 	if err != nil {
-		return "", errors.New("failed to load user")
+		return "", "", "", errors.New("failed to load user")
 	}
 
 	accessToken, err := us.tokenService.CreateToken(user.Id.String(), *user.Username, *user.Email, 15*time.Minute)
 	if err != nil {
-		return "", err
+		return "", "", "", err
 	}
 
-	return accessToken, nil
+	// Rotate refresh token transactionally: create a new one and revoke the old in a single operation.
+	newRefresh := uuid.New().String()
+	newExpiry := time.Now().Add(7 * 24 * time.Hour)
+	if err := us.sessionRepo.Rotate(ctx, userID, refreshToken, newRefresh, newExpiry.Format(time.RFC3339)); err != nil {
+		us.logger.Log(ctx, config.ErrorLevel, "failed to rotate refresh token", map[string]any{"error": err.Error()})
+		return "", "", "", errors.New("failed to rotate refresh token")
+	}
+
+	return accessToken, newRefresh, newExpiry.Format(time.RFC3339), nil
 }
