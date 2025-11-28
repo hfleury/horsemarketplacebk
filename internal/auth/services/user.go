@@ -265,17 +265,12 @@ func (us *UserService) Refresh(ctx context.Context, refreshToken string) (string
 		return "", "", "", err
 	}
 
-	// Rotate refresh token: create a new one, persist, then revoke the old one.
+	// Rotate refresh token transactionally: create a new one and revoke the old in a single operation.
 	newRefresh := uuid.New().String()
 	newExpiry := time.Now().Add(7 * 24 * time.Hour)
-	if err := us.sessionRepo.Create(ctx, userID, newRefresh, newExpiry.Format(time.RFC3339)); err != nil {
-		// If we cannot persist a new refresh token, fail the operation.
-		return "", "", "", errors.New("failed to create new refresh token")
-	}
-
-	// Revoke the old token; ignore revoke error but log it
-	if err := us.sessionRepo.Revoke(ctx, refreshToken); err != nil {
-		us.logger.Log(ctx, config.ErrorLevel, "failed to revoke old refresh token", map[string]any{"error": err.Error()})
+	if err := us.sessionRepo.Rotate(ctx, userID, refreshToken, newRefresh, newExpiry.Format(time.RFC3339)); err != nil {
+		us.logger.Log(ctx, config.ErrorLevel, "failed to rotate refresh token", map[string]any{"error": err.Error()})
+		return "", "", "", errors.New("failed to rotate refresh token")
 	}
 
 	return accessToken, newRefresh, newExpiry.Format(time.RFC3339), nil
