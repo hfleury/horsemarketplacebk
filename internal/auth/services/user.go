@@ -11,14 +11,17 @@ import (
 	"github.com/hfleury/horsemarketplacebk/config"
 	"github.com/hfleury/horsemarketplacebk/internal/auth/models"
 	"github.com/hfleury/horsemarketplacebk/internal/auth/repositories"
+	"github.com/hfleury/horsemarketplacebk/internal/email"
 	"golang.org/x/crypto/bcrypt"
 )
 
 type UserService struct {
-	userRepo     repositories.UserRepository
-	logger       config.Logging
-	tokenService *TokenService
-	sessionRepo  repositories.SessionRepository
+	userRepo       repositories.UserRepository
+	logger         config.Logging
+	tokenService   *TokenService
+	sessionRepo    repositories.SessionRepository
+	emailSender    email.Sender
+	emailVerifRepo repositories.EmailVerificationRepository
 }
 
 func NewUserService(userRepo repositories.UserRepository, logger config.Logging, tokenService *TokenService, sessionRepo repositories.SessionRepository) *UserService {
@@ -28,6 +31,17 @@ func NewUserService(userRepo repositories.UserRepository, logger config.Logging,
 		tokenService: tokenService,
 		sessionRepo:  sessionRepo,
 	}
+}
+
+// SetEmailSender allows wiring an email.Sender after construction without
+// changing existing constructor call sites.
+func (us *UserService) SetEmailSender(s email.Sender) {
+	us.emailSender = s
+}
+
+// SetEmailVerificationRepo wires the EmailVerification repository.
+func (us *UserService) SetEmailVerificationRepo(r repositories.EmailVerificationRepository) {
+	us.emailVerifRepo = r
 }
 
 func (us *UserService) CreateUser(ctx context.Context, userRequest models.UserCreateResquest) (*models.User, error) {
@@ -85,6 +99,37 @@ func (us *UserService) CreateUser(ctx context.Context, userRequest models.UserCr
 	userCreated, err := us.userRepo.Insert(ctx, &user)
 	if err != nil {
 		return nil, err
+	}
+
+	// If an email sender and verification repository are configured, persist a verification token and send the email.
+	if us.emailSender != nil && us.emailVerifRepo != nil && userCreated.Email != nil {
+		verificationToken := uuid.New().String()
+		now := time.Now().UTC()
+		expiry := now.Add(48 * time.Hour)
+		ev := &models.EmailVerification{
+			UserId:            userCreated.Id,
+			VerificationToken: &verificationToken,
+			Email:             userCreated.Email,
+			RequestedAt:       &now,
+			ExpiresAt:         &expiry,
+		}
+		if _, err := us.emailVerifRepo.Create(ctx, ev); err != nil {
+			us.logger.Log(ctx, config.ErrorLevel, "failed to persist email verification", map[string]any{"error": err.Error()})
+		}
+
+		verifyLink := fmt.Sprintf("/api/v1/auth/verify?token=%s", verificationToken)
+		body := fmt.Sprintf("Hello %s,\n\nPlease verify your email by visiting the following link:\n%s\n\nIf you did not sign up, ignore this message.", func() string {
+			if userCreated.Username != nil {
+				return *userCreated.Username
+			}
+			return "user"
+		}(), verifyLink)
+
+		if err := us.emailSender.Send(ctx, *userCreated.Email, "Verify your HorseMarketplace email", body); err != nil {
+			us.logger.Log(ctx, config.ErrorLevel, "failed to send verification email", map[string]any{"error": err.Error()})
+		} else {
+			us.logger.Log(ctx, config.InfoLevel, "sent verification email", map[string]any{"email": *userCreated.Email})
+		}
 	}
 
 	return userCreated, nil
@@ -274,4 +319,40 @@ func (us *UserService) Refresh(ctx context.Context, refreshToken string) (string
 	}
 
 	return accessToken, newRefresh, newExpiry.Format(time.RFC3339), nil
+}
+
+// VerifyEmail validates a verification token, marks the email verification record
+// as verified and updates the user's is_verified flag.
+func (us *UserService) VerifyEmail(ctx context.Context, token string) error {
+	if us.emailVerifRepo == nil {
+		return errors.New("email verification repository not configured")
+	}
+
+	ev, err := us.emailVerifRepo.SelectByToken(ctx, token)
+	if err != nil {
+		return errors.New("invalid verification token")
+	}
+
+	// check expiry
+	if ev.ExpiresAt != nil {
+		if ev.ExpiresAt.Before(time.Now().UTC()) {
+			return errors.New("verification token expired")
+		}
+	}
+
+	// mark email verification record as verified
+	if err := us.emailVerifRepo.MarkVerified(ctx, token); err != nil {
+		us.logger.Log(ctx, config.ErrorLevel, "failed to mark verification record verified", map[string]any{"error": err.Error()})
+		return errors.New("failed to verify email")
+	}
+
+	// update user record
+	if ev.UserId != nil {
+		if err := us.userRepo.SetVerified(ctx, ev.UserId.String(), true); err != nil {
+			us.logger.Log(ctx, config.ErrorLevel, "failed to set user verified", map[string]any{"error": err.Error()})
+			return errors.New("failed to verify user")
+		}
+	}
+
+	return nil
 }

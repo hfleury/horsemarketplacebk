@@ -182,3 +182,13 @@ func (ur *UserRepoPsql) SelectUserByID(ctx context.Context, id string) (*models.
 
 	return user, nil
 }
+
+// SetVerified updates the user's verified status
+func (ur *UserRepoPsql) SetVerified(ctx context.Context, id string, verified bool) error {
+	query := `UPDATE authentic.users SET is_verified = $2, updated_at = NOW() WHERE id = $1`
+	_, err := ur.psql.Execute(ctx, query, id, verified)
+	if err != nil {
+		ur.logger.Log(ctx, config.ErrorLevel, "Failed to set user verified", map[string]any{"error": err.Error()})
+	}
+	return err
+}

@@ -281,3 +281,28 @@ func (h *UserHandler) Refresh(c *gin.Context) {
 	response.Data = map[string]string{"access_token": accessToken}
 	c.JSON(http.StatusOK, response)
 }
+
+func (h *UserHandler) Verify(c *gin.Context) {
+	logger := h.logger.GetLoggerFromContext(c)
+	response := common.APIResponse{}
+
+	token := c.Query("token")
+	if token == "" {
+		response.Status = "error"
+		response.Message = "token required"
+		c.JSON(http.StatusBadRequest, response)
+		return
+	}
+
+	if err := h.userService.VerifyEmail(c.Request.Context(), token); err != nil {
+		logger.Log(c, config.ErrorLevel, "Failed to verify email", map[string]any{"error": err.Error()})
+		response.Status = "error"
+		response.Message = "Invalid or expired token"
+		c.JSON(http.StatusBadRequest, response)
+		return
+	}
+
+	response.Status = "success"
+	response.Message = "Email verified"
+	c.JSON(http.StatusOK, response)
+}
