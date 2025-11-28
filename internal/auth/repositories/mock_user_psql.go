@@ -109,3 +109,18 @@ func (mr *MockUserRepositoryMockRecorder) SelectUserByUsername(ctx, user interfa
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SelectUserByUsername", reflect.TypeOf((*MockUserRepository)(nil).SelectUserByUsername), ctx, user)
 }
+
+// SelectUserByID mocks base method.
+func (m *MockUserRepository) SelectUserByID(ctx context.Context, id string) (*models.User, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SelectUserByID", ctx, id)
+	ret0, _ := ret[0].(*models.User)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// SelectUserByID indicates an expected call of SelectUserByID.
+func (mr *MockUserRepositoryMockRecorder) SelectUserByID(ctx, id interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SelectUserByID", reflect.TypeOf((*MockUserRepository)(nil).SelectUserByID), ctx, id)
+}

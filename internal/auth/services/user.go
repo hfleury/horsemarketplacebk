@@ -226,3 +226,40 @@ func (us *UserService) Logout(ctx context.Context, refreshToken string) error {
 	}
 	return us.sessionRepo.Revoke(ctx, refreshToken)
 }
+
+// Refresh issues a new access token given a valid refresh token
+func (us *UserService) Refresh(ctx context.Context, refreshToken string) (string, error) {
+	if us.sessionRepo == nil {
+		return "", errors.New("session repository not configured")
+	}
+
+	userID, isActive, expiresAt, err := us.sessionRepo.Validate(ctx, refreshToken)
+	if err != nil {
+		return "", errors.New("invalid refresh token")
+	}
+	if !isActive {
+		return "", errors.New("refresh token not active")
+	}
+
+	// check expiry
+	if expiresAt != "" {
+		if t, err := time.Parse(time.RFC3339, expiresAt); err == nil {
+			if t.Before(time.Now().UTC()) {
+				return "", errors.New("refresh token expired")
+			}
+		}
+	}
+
+	// Load user details to include in new token
+	user, err := us.userRepo.SelectUserByID(ctx, userID)
+	if err != nil {
+		return "", errors.New("failed to load user")
+	}
+
+	accessToken, err := us.tokenService.CreateToken(user.Id.String(), *user.Username, *user.Email, 15*time.Minute)
+	if err != nil {
+		return "", err
+	}
+
+	return accessToken, nil
+}
