@@ -148,26 +148,38 @@ func (us *UserService) hashPassword(ctx context.Context, password string) (strin
 	return string(passwordHash), nil
 }
 
-func (us *UserService) Login(ctx context.Context, userLogin models.UserLogin) (*models.User, string, error) {
+func (us *UserService) Login(ctx context.Context, userLogin models.UserLogin) (*models.LoginResponse, error) {
 	if userLogin.Username == nil || userLogin.PasswordHash == nil {
-		return nil, "", errors.New("username and password must be provided")
+		return nil, errors.New("username and password must be provided")
 	}
 
 	user := &models.User{Username: userLogin.Username}
 	user, err := us.userRepo.SelectUserByUsername(ctx, user)
 	if err != nil {
-		return nil, "", errors.New("invalid credentials")
+		return nil, errors.New("invalid credentials")
 	}
 
 	err = bcrypt.CompareHashAndPassword([]byte(*user.PasswordHash), []byte(*userLogin.PasswordHash))
 	if err != nil {
-		return nil, "", errors.New("invalid credentials")
+		return nil, errors.New("invalid credentials")
 	}
 
-	token, err := us.tokenService.CreateToken(*user.Username, 24*time.Hour)
+	// Create token with user ID, username, and email
+	token, err := us.tokenService.CreateToken(user.Id.String(), *user.Username, *user.Email, 24*time.Hour)
 	if err != nil {
-		return nil, "", err
+		return nil, err
 	}
 
-	return user, token, nil
+	// Return safe response without sensitive data
+	expiresAt := time.Now().Add(24 * time.Hour).Format(time.RFC3339)
+	loginResponse := &models.LoginResponse{
+		Token: token,
+		User: models.UserResponse{
+			Username: *user.Username,
+			Email:    *user.Email,
+		},
+		ExpiresAt: expiresAt,
+	}
+
+	return loginResponse, nil
 }
