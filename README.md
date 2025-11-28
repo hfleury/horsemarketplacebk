@@ -99,12 +99,22 @@ just test-coverage
 
 ## 🔌 API Endpoints
 
-### Authentication
+All API endpoints are versioned and prefixed with `/api/v1`.
 
-- **POST** `/auth/user` - Create a new user
-- **GET** `/auth/users` - Get user by username (Query param)
-- **GET** `/auth/login` - Login user (Returns PASETO token)
-    - *Note: Accepts JSON body with `username` and `password_hash`*
+### Authentication (`/api/v1/auth`)
+
+- **POST** `/api/v1/auth/users` - Create a new user
+  - Request body: `{"username": "string", "email": "string", "password": "string"}`
+  - Response: User object (without sensitive data)
+
+- **GET** `/api/v1/auth/users` - Get user by username or email
+  - Query params: `username` or `email`
+  - Response: User object (without sensitive data)
+
+- **POST** `/api/v1/auth/login` - Login user (Returns PASETO token)
+  - Request body: `{"username": "string", "password": "string"}`
+  - Response: `{"token": "string", "user": {"username": "string", "email": "string"}, "expires_at": "string"}`
+
 
 ## 📂 Project Structure
 
