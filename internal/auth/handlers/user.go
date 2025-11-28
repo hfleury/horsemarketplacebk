@@ -2,6 +2,8 @@ package handlers
 
 import (
 	"net/http"
+	"os"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/hfleury/horsemarketplacebk/config"
@@ -131,6 +133,34 @@ func (h *UserHandler) Login(c *gin.Context) {
 		return
 	}
 
+	// Put refresh token into a secure, HttpOnly cookie and remove from JSON response
+	if loginResponse.RefreshToken != "" {
+		// determine secure flag: only true in production
+		secure := false
+		if os.Getenv("ENVIRONMENT") == "production" {
+			secure = true
+		}
+		// parse expiry
+		var expires time.Time
+		if loginResponse.RefreshExpiresAt != "" {
+			if t, err := time.Parse(time.RFC3339, loginResponse.RefreshExpiresAt); err == nil {
+				expires = t
+			}
+		}
+		maxAge := 0
+		if !expires.IsZero() {
+			maxAge = int(time.Until(expires).Seconds())
+			if maxAge < 0 {
+				maxAge = 0
+			}
+		}
+
+		// set cookie on root path so it's available to refresh/logout endpoints
+		c.SetCookie("refresh_token", loginResponse.RefreshToken, maxAge, "/", "", secure, true)
+		// remove from JSON response to keep it HttpOnly
+		loginResponse.RefreshToken = ""
+	}
+
 	response.Status = "success"
 	response.Message = "Login successful"
 	response.Data = loginResponse
@@ -158,14 +188,25 @@ func (h *UserHandler) Logout(c *gin.Context) {
 		return
 	}
 
-	if body.RefreshToken == nil || *body.RefreshToken == "" {
+	// allow refresh token to be provided by cookie or body
+	var token string
+	if body.RefreshToken != nil && *body.RefreshToken != "" {
+		token = *body.RefreshToken
+	} else {
+		// try cookie
+		if cookie, err := c.Cookie("refresh_token"); err == nil {
+			token = cookie
+		}
+	}
+
+	if token == "" {
 		response.Status = "error"
 		response.Message = "refresh_token required"
 		c.JSON(http.StatusBadRequest, response)
 		return
 	}
 
-	if err := h.userService.Logout(c.Request.Context(), *body.RefreshToken); err != nil {
+	if err := h.userService.Logout(c.Request.Context(), token); err != nil {
 		logger.Log(c, config.ErrorLevel, "Failed to logout", map[string]any{
 			"error": err.Error(),
 		})
@@ -176,7 +217,49 @@ func (h *UserHandler) Logout(c *gin.Context) {
 		return
 	}
 
+	// clear cookie on logout
+	// set cookie expired
+	c.SetCookie("refresh_token", "", -1, "/", "", false, true)
+
 	response.Status = "success"
 	response.Message = "Logged out"
+	c.JSON(http.StatusOK, response)
+}
+
+func (h *UserHandler) Refresh(c *gin.Context) {
+	logger := h.logger.GetLoggerFromContext(c)
+	response := common.APIResponse{}
+
+	// Accept refresh token from cookie or POST body
+	var token string
+	if cookie, err := c.Cookie("refresh_token"); err == nil && cookie != "" {
+		token = cookie
+	} else {
+		var body struct {
+			RefreshToken *string `json:"refresh_token"`
+		}
+		if err := c.ShouldBindJSON(&body); err != nil || body.RefreshToken == nil || *body.RefreshToken == "" {
+			response.Status = "error"
+			response.Message = "refresh_token required"
+			c.JSON(http.StatusBadRequest, response)
+			return
+		}
+		token = *body.RefreshToken
+	}
+
+	accessToken, err := h.userService.Refresh(c.Request.Context(), token)
+	if err != nil {
+		logger.Log(c, config.ErrorLevel, "Failed to refresh token", map[string]any{
+			"error": err.Error(),
+		})
+		response.Status = "error"
+		response.Message = "Invalid or expired refresh token"
+		c.JSON(http.StatusUnauthorized, response)
+		return
+	}
+
+	response.Status = "success"
+	response.Message = "Token refreshed"
+	response.Data = map[string]string{"access_token": accessToken}
 	c.JSON(http.StatusOK, response)
 }

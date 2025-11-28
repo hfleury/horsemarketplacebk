@@ -152,3 +152,33 @@ func (ur *UserRepoPsql) SelectUserByEmail(ctx context.Context, user *models.User
 
 	return user, nil
 }
+
+// SelectUserByID returns a user by its ID
+func (ur *UserRepoPsql) SelectUserByID(ctx context.Context, id string) (*models.User, error) {
+	query := `
+		SELECT id, username, email, password_hash, is_active, is_verified, last_login, created_at, updated_at
+		FROM authentic.users
+		WHERE id = $1;
+	`
+	user := &models.User{}
+	err := ur.psql.QueryRow(ctx, query, id).Scan(
+		&user.Id,
+		&user.Username,
+		&user.Email,
+		&user.PasswordHash,
+		&user.IsActive,
+		&user.IsVerified,
+		&user.LastLogin,
+		&user.CreatedAt,
+		&user.UpdatedAt,
+	)
+	if err != nil {
+		ur.logger.Log(ctx, config.ErrorLevel, "Failed to get user by id", map[string]any{
+			"error": err.Error(),
+			"query": query,
+		})
+		return nil, err
+	}
+
+	return user, nil
+}

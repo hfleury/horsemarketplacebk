@@ -12,4 +12,5 @@ type UserRepository interface {
 	Insert(ctx context.Context, user *models.User) (*models.User, error)
 	SelectUserByUsername(ctx context.Context, user *models.User) (*models.User, error)
 	SelectUserByEmail(ctx context.Context, user *models.User) (*models.User, error)
+	SelectUserByID(ctx context.Context, id string) (*models.User, error)
 }
