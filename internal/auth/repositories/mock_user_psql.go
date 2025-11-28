@@ -124,3 +124,17 @@ func (mr *MockUserRepositoryMockRecorder) SelectUserByID(ctx, id interface{}) *g
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SelectUserByID", reflect.TypeOf((*MockUserRepository)(nil).SelectUserByID), ctx, id)
 }
+
+// SetVerified mocks base method.
+func (m *MockUserRepository) SetVerified(ctx context.Context, id string, verified bool) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SetVerified", ctx, id, verified)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// SetVerified indicates an expected call of SetVerified.
+func (mr *MockUserRepositoryMockRecorder) SetVerified(ctx, id, verified interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetVerified", reflect.TypeOf((*MockUserRepository)(nil).SetVerified), ctx, id, verified)
+}

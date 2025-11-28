@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"fmt"
+	"os"
+	"time"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
@@ -11,6 +13,7 @@ import (
 	"github.com/hfleury/horsemarketplacebk/internal/auth/repositories"
 	"github.com/hfleury/horsemarketplacebk/internal/auth/services"
 	"github.com/hfleury/horsemarketplacebk/internal/db"
+	"github.com/hfleury/horsemarketplacebk/internal/email"
 	"github.com/hfleury/horsemarketplacebk/internal/middleware"
 	"github.com/hfleury/horsemarketplacebk/internal/router"
 	"github.com/rs/zerolog"
@@ -49,6 +52,22 @@ func initializeApp(ctx context.Context, configService config.Configuration, newD
 	// Services
 	tokenService := services.NewTokenService(configService.GetConfig(), logger)
 	userService := services.NewUserService(userRepo, logger, tokenService, sessionRepo)
+
+	// Email verification repository
+	emailVerifRepo := repositories.NewEmailVerificationRepoPsql(db, logger)
+	userService.SetEmailVerificationRepo(emailVerifRepo)
+
+	// Email sender: prefer Mailgun if env vars provided, otherwise use MockSender for local/dev
+	mailgunDomain := os.Getenv("MAILGUN_DOMAIN")
+	mailgunAPIKey := os.Getenv("MAILGUN_API_KEY")
+	mailFrom := os.Getenv("MAIL_FROM")
+	var sender email.Sender
+	if mailgunDomain != "" && mailgunAPIKey != "" && mailFrom != "" {
+		sender = email.NewMailgunSender(mailgunDomain, mailgunAPIKey, mailFrom, 10*time.Second)
+	} else {
+		sender = email.NewMockSender()
+	}
+	userService.SetEmailSender(sender)
 
 	// Create the Gin router and add middleware
 	server := gin.New()

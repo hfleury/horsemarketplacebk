@@ -14,4 +14,6 @@ type UserRepository interface {
 	SelectUserByUsername(ctx context.Context, user *models.User) (*models.User, error)
 	SelectUserByEmail(ctx context.Context, user *models.User) (*models.User, error)
 	SelectUserByID(ctx context.Context, id string) (*models.User, error)
+	// SetVerified updates the user's verified status
+	SetVerified(ctx context.Context, id string, verified bool) error
 }
