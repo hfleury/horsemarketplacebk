@@ -137,3 +137,46 @@ func (h *UserHandler) Login(c *gin.Context) {
 
 	c.JSON(http.StatusOK, response)
 }
+
+func (h *UserHandler) Logout(c *gin.Context) {
+	logger := h.logger.GetLoggerFromContext(c)
+	response := common.APIResponse{}
+	var body struct {
+		RefreshToken *string `json:"refresh_token"`
+	}
+
+	if err := c.ShouldBindJSON(&body); err != nil {
+		requestBody, _ := c.Get("request_body")
+		logger.Log(c, config.ErrorLevel, "Failed to bind request", map[string]any{
+			"error":        err.Error(),
+			"request_body": requestBody,
+		})
+
+		response.Status = "error"
+		response.Message = "Invalid request body"
+		c.JSON(http.StatusBadRequest, response)
+		return
+	}
+
+	if body.RefreshToken == nil || *body.RefreshToken == "" {
+		response.Status = "error"
+		response.Message = "refresh_token required"
+		c.JSON(http.StatusBadRequest, response)
+		return
+	}
+
+	if err := h.userService.Logout(c.Request.Context(), *body.RefreshToken); err != nil {
+		logger.Log(c, config.ErrorLevel, "Failed to logout", map[string]any{
+			"error": err.Error(),
+		})
+		response.Status = "error"
+		response.Message = "Failed to logout"
+		response.Error = err.Error()
+		c.JSON(http.StatusInternalServerError, response)
+		return
+	}
+
+	response.Status = "success"
+	response.Message = "Logged out"
+	c.JSON(http.StatusOK, response)
+}

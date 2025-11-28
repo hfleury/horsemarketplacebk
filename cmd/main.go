@@ -44,10 +44,11 @@ func initializeApp(ctx context.Context, configService config.Configuration, newD
 
 	// Repositories
 	userRepo := repositories.NewUserRepoPsql(db, logger)
+	sessionRepo := repositories.NewSessionRepoPsql(db, logger)
 
 	// Services
 	tokenService := services.NewTokenService(configService.GetConfig(), logger)
-	userService := services.NewUserService(userRepo, logger, tokenService)
+	userService := services.NewUserService(userRepo, logger, tokenService, sessionRepo)
 
 	// Create the Gin router and add middleware
 	server := gin.New()

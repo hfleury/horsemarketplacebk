@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/hfleury/horsemarketplacebk/config"
 	"github.com/hfleury/horsemarketplacebk/internal/auth/models"
 	"github.com/hfleury/horsemarketplacebk/internal/auth/repositories"
@@ -17,13 +18,15 @@ type UserService struct {
 	userRepo     repositories.UserRepository
 	logger       config.Logging
 	tokenService *TokenService
+	sessionRepo  repositories.SessionRepository
 }
 
-func NewUserService(userRepo repositories.UserRepository, logger config.Logging, tokenService *TokenService) *UserService {
+func NewUserService(userRepo repositories.UserRepository, logger config.Logging, tokenService *TokenService, sessionRepo repositories.SessionRepository) *UserService {
 	return &UserService{
 		userRepo:     userRepo,
 		logger:       logger,
 		tokenService: tokenService,
+		sessionRepo:  sessionRepo,
 	}
 }
 
@@ -150,36 +153,76 @@ func (us *UserService) hashPassword(ctx context.Context, password string) (strin
 
 func (us *UserService) Login(ctx context.Context, userLogin models.UserLogin) (*models.LoginResponse, error) {
 	if userLogin.Username == nil || userLogin.PasswordHash == nil {
+		us.logger.Log(ctx, config.InfoLevel, "Username or password missing", map[string]any{
+			"Message": "Username or password missing",
+		})
 		return nil, errors.New("username and password must be provided")
 	}
 
 	user := &models.User{Username: userLogin.Username}
 	user, err := us.userRepo.SelectUserByUsername(ctx, user)
 	if err != nil {
+		us.logger.Log(ctx, config.InfoLevel, "Invalid credentials", map[string]any{
+			"Message": "Invalid credentials",
+		})
 		return nil, errors.New("invalid credentials")
 	}
 
 	err = bcrypt.CompareHashAndPassword([]byte(*user.PasswordHash), []byte(*userLogin.PasswordHash))
 	if err != nil {
+		us.logger.Log(ctx, config.InfoLevel, "Invalid credentials", map[string]any{
+			"Message": "Invalid credentials",
+		})
 		return nil, errors.New("invalid credentials")
 	}
 
-	// Create token with user ID, username, and email
-	token, err := us.tokenService.CreateToken(user.Id.String(), *user.Username, *user.Email, 24*time.Hour)
+	// Create access token (short lived) and refresh session
+	accessTTL := 24 * time.Hour
+	accessToken, err := us.tokenService.CreateToken(user.Id.String(), *user.Username, *user.Email, accessTTL)
 	if err != nil {
+		us.logger.Log(ctx, config.ErrorLevel, "Failed to create access token", map[string]any{
+			"Error": err.Error(),
+		})
 		return nil, err
 	}
 
-	// Return safe response without sensitive data
-	expiresAt := time.Now().Add(24 * time.Hour).Format(time.RFC3339)
+	// create refresh token via sessionRepo
+	if us.sessionRepo == nil {
+		us.logger.Log(ctx, config.ErrorLevel, "Session repository not configured", map[string]any{
+			"Error": "session repository is nil",
+		})
+		return nil, errors.New("session repository not configured")
+	}
+
+	refreshToken := uuid.New().String()
+	refreshExpiry := time.Now().Add(7 * 24 * time.Hour)
+	// sessionRepo.Create expects RFC3339 expiry string
+	if err := us.sessionRepo.Create(ctx, user.Id.String(), refreshToken, refreshExpiry.Format(time.RFC3339)); err != nil {
+		us.logger.Log(ctx, config.ErrorLevel, "Failed to create refresh session", map[string]any{
+			"Error": err.Error(),
+		})
+		return nil, err
+	}
+
+	// Build response
 	loginResponse := &models.LoginResponse{
-		Token: token,
+		Token: accessToken,
 		User: models.UserResponse{
 			Username: *user.Username,
 			Email:    *user.Email,
 		},
-		ExpiresAt: expiresAt,
+		ExpiresAt:        time.Now().Add(accessTTL).Format(time.RFC3339),
+		RefreshToken:     refreshToken,
+		RefreshExpiresAt: refreshExpiry.Format(time.RFC3339),
 	}
 
 	return loginResponse, nil
+}
+
+// Logout invalidates a refresh token (session)
+func (us *UserService) Logout(ctx context.Context, refreshToken string) error {
+	if us.sessionRepo == nil {
+		return errors.New("session repository not configured")
+	}
+	return us.sessionRepo.Revoke(ctx, refreshToken)
 }
