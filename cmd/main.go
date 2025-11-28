@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/hfleury/horsemarketplacebk/config"
@@ -50,6 +51,7 @@ func initializeApp(ctx context.Context, configService config.Configuration, newD
 
 	// Create the Gin router and add middleware
 	server := gin.New()
+	server.Use(cors.Default())
 	server.Use(middleware.LoggerMiddleware(logger))
 
 	// routes
