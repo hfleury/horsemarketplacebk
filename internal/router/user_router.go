@@ -10,9 +10,13 @@ import (
 func registerUserRoutes(router *gin.Engine, logger config.Logging, userService *services.UserService) {
 	userHandler := handlers.NewUserHandler(logger, userService)
 
-	authRoutes := router.Group("/auth")
+	v1 := router.Group("/api/v1")
 	{
-		authRoutes.POST("/user", userHandler.CreateUser)
-		authRoutes.GET("/users", userHandler.GetUserByUsername)
+		authRoutes := v1.Group("/auth")
+		{
+			authRoutes.POST("/users", userHandler.CreateUser)
+			authRoutes.GET("/users", userHandler.GetUserByUsername)
+			authRoutes.POST("/login", userHandler.Login)
+		}
 	}
 }

@@ -26,6 +26,7 @@ func (vs *VipperService) LoadConfiguration() {
 	vs.Config.Psql.Port = viper.GetString("PSQL_PORT")
 	vs.Config.Psql.Password = viper.GetString("PSQL_PASSWORD")
 	vs.Config.Psql.SSLMode = viper.GetString("PSQL_SSLMODE")
+	vs.Config.PasetoKey = viper.GetString("PASETO_KEY")
 	vs.Config.Env = viper.GetString("ENVIRONMENT")
 
 	// Log loaded configuration for debugging

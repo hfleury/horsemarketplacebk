@@ -10,6 +10,7 @@ type PostgresConfig struct {
 }
 
 type AllConfiguration struct {
-	Psql PostgresConfig `mapstructure:"psql"`
-	Env  string         `mapstructure:"environment"`
+	Psql      PostgresConfig `mapstructure:"psql"`
+	PasetoKey string         `mapstructure:"paseto_key"`
+	Env       string         `mapstructure:"environment"`
 }

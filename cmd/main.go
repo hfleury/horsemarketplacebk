@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/hfleury/horsemarketplacebk/config"
@@ -12,19 +13,27 @@ import (
 	"github.com/hfleury/horsemarketplacebk/internal/db"
 	"github.com/hfleury/horsemarketplacebk/internal/middleware"
 	"github.com/hfleury/horsemarketplacebk/internal/router"
+	"github.com/rs/zerolog"
 )
 
-func initializeApp(ctx context.Context, configService config.Configuration) (*gin.Engine, error) {
+type dbFactory func(config *config.AllConfiguration, logger zerolog.Logger) (*db.PsqlDB, error)
+
+type Server interface {
+	Run(addr ...string) error
+}
+
+func initializeApp(ctx context.Context, configService config.Configuration, newDB dbFactory) (Server, error) {
 	// Configuration
 	configService.LoadConfiguration()
 
 	// Logging
 	logger := config.NewZerologService()
+	logger.Logger.Debug().Msg("Logger initialized")
 
 	// DB PSQL
-	db, err := db.NewPsqlDB(configService.GetConfig(), *logger.Logger)
+	db, err := newDB(configService.GetConfig(), *logger.Logger)
 	if err != nil {
-		logger.Logger.Fatal().Err(err).Msg("Error initialize the Postgres DB")
+		logger.Logger.Error().Err(err).Msg("Error initialize the Postgres DB")
 		return nil, err
 	}
 
@@ -37,30 +46,52 @@ func initializeApp(ctx context.Context, configService config.Configuration) (*gi
 	userRepo := repositories.NewUserRepoPsql(db, logger)
 
 	// Services
-	userService := services.NewUserService(userRepo, logger)
+	tokenService := services.NewTokenService(configService.GetConfig(), logger)
+	userService := services.NewUserService(userRepo, logger, tokenService)
 
 	// Create the Gin router and add middleware
 	server := gin.New()
+	server.Use(cors.New(cors.Config{
+		AllowOrigins:     []string{"http://localhost:5173"},
+		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
+		AllowHeaders:     []string{"Content-Type", "Authorization"},
+		AllowCredentials: true,
+	}))
 	server.Use(middleware.LoggerMiddleware(logger))
 
 	// routes
-	server = router.SetupRouter(logger, userService)
+	server = router.SetupRouter(server, logger, userService)
 
 	return server, nil
 }
 
-func main() {
-	ctx := context.Background()
+type Launcher struct {
+	AppInitializer func(context.Context, config.Configuration, dbFactory) (Server, error)
+}
 
-	configService := config.NewVipperService()
-
-	server, err := initializeApp(ctx, configService)
+func (l *Launcher) Run(ctx context.Context, configService config.Configuration, newDB dbFactory) error {
+	server, err := l.AppInitializer(ctx, configService, newDB)
 	if err != nil {
-		panic("Failed to initialize application")
+		return err
 	}
 
 	if err := server.Run(":8080"); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func main() {
+	ctx := context.Background()
+	configService := config.NewVipperService()
+
+	launcher := &Launcher{
+		AppInitializer: initializeApp,
+	}
+
+	if err := launcher.Run(ctx, configService, db.NewPsqlDB); err != nil {
 		fmt.Print(err)
-		panic("Failed to start server")
+		panic("Application failed")
 	}
 }

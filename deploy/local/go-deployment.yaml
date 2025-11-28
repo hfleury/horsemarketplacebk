@@ -18,6 +18,7 @@ spec:
       containers:
       - name: golang-server
         image: hfcardoso/golang-server:latest
+        imagePullPolicy: Never
         ports:
         - containerPort: 8080
         envFrom:
