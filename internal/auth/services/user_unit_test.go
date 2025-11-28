@@ -58,7 +58,7 @@ func TestCreateUser_success(t *testing.T) {
 	mockZipperService.EXPECT().Log(ctx, config.InfoLevel, "Username in use", gomock.Any()).AnyTimes()
 	mockZipperService.EXPECT().Log(ctx, config.InfoLevel, "Email in use", gomock.Any()).AnyTimes()
 
-	userService := NewUserService(mockUserRepo, mockZipperService, nil)
+	userService := NewUserService(mockUserRepo, mockZipperService, nil, nil)
 	rtnCreateUser, err := userService.CreateUser(ctx, userRequest)
 
 	assert.NoError(t, err, "No error expected")
@@ -79,7 +79,7 @@ func TestCreateUser_fail_username_nil(t *testing.T) {
 	mockUserRepo := repositories.NewMockUserRepository(ctrl)
 	mockZipperService := config.NewMockLogging(ctrl)
 
-	userService := NewUserService(mockUserRepo, mockZipperService, nil)
+	userService := NewUserService(mockUserRepo, mockZipperService, nil, nil)
 	rtnCreateUser, err := userService.CreateUser(ctx, userRequest)
 
 	assert.Error(t, err, "Expected an error for nil username")
@@ -106,7 +106,7 @@ func TestCreateUser_fail_username_exist(t *testing.T) {
 		"Data":    *userRequest.Username,
 	}).Times(1)
 
-	userService := NewUserService(mockUserRepo, mockZipperService, nil)
+	userService := NewUserService(mockUserRepo, mockZipperService, nil, nil)
 	rtnCreateUser, err := userService.CreateUser(ctx, userRequest)
 
 	assert.Error(t, err, "Expected an error for nil username")
@@ -129,7 +129,7 @@ func TestCreateUser_fail_email_nil(t *testing.T) {
 
 	mockZipperService := config.NewMockLogging(ctrl)
 
-	userService := NewUserService(mockUserRepo, mockZipperService, nil)
+	userService := NewUserService(mockUserRepo, mockZipperService, nil, nil)
 	rtnCreateUser, err := userService.CreateUser(ctx, userRequest)
 
 	assert.Error(t, err, "Expected an error for nil username")
@@ -157,7 +157,7 @@ func TestCreateUser_fail_email_exist(t *testing.T) {
 		"Data":    *userRequest.Username,
 	}).Times(1)
 
-	userService := NewUserService(mockUserRepo, mockZipperService, nil)
+	userService := NewUserService(mockUserRepo, mockZipperService, nil, nil)
 	rtnCreateUser, err := userService.CreateUser(ctx, userRequest)
 
 	assert.Error(t, err, "Expected an error for nil username")
@@ -181,7 +181,7 @@ func TestCreateUser_fail_password_missing_specialchar(t *testing.T) {
 
 	mockZipperService := config.NewMockLogging(ctrl)
 
-	userService := NewUserService(mockUserRepo, mockZipperService, nil)
+	userService := NewUserService(mockUserRepo, mockZipperService, nil, nil)
 	rtnCreateUser, err := userService.CreateUser(ctx, userRequest)
 
 	assert.Error(t, err, "expect to have an error")
@@ -205,7 +205,7 @@ func TestCreateUser_fail_password_missing_number(t *testing.T) {
 
 	mockZipperService := config.NewMockLogging(ctrl)
 
-	userService := NewUserService(mockUserRepo, mockZipperService, nil)
+	userService := NewUserService(mockUserRepo, mockZipperService, nil, nil)
 	rtnCreateUser, err := userService.CreateUser(ctx, userRequest)
 
 	assert.Error(t, err, "expect to have an error")
@@ -229,7 +229,7 @@ func TestCreateUser_fail_password_missing_letter(t *testing.T) {
 
 	mockZipperService := config.NewMockLogging(ctrl)
 
-	userService := NewUserService(mockUserRepo, mockZipperService, nil)
+	userService := NewUserService(mockUserRepo, mockZipperService, nil, nil)
 	rtnCreateUser, err := userService.CreateUser(ctx, userRequest)
 
 	assert.Error(t, err, "expect to have an error")
