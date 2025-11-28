@@ -119,7 +119,7 @@ func (h *UserHandler) Login(c *gin.Context) {
 		return
 	}
 
-	user, token, err := h.userService.Login(c.Request.Context(), userRequest)
+	loginResponse, err := h.userService.Login(c.Request.Context(), userRequest)
 	if err != nil {
 		logger.Log(c, config.ErrorLevel, "Failed to login", map[string]any{
 			"error": err.Error(),
@@ -133,10 +133,7 @@ func (h *UserHandler) Login(c *gin.Context) {
 
 	response.Status = "success"
 	response.Message = "Login successful"
-	response.Data = map[string]any{
-		"user":  user,
-		"token": token,
-	}
+	response.Data = loginResponse
 
 	c.JSON(http.StatusOK, response)
 }
