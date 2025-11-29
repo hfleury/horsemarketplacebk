@@ -9,7 +9,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/hfleury/horsemarketplacebk/config"
 	"github.com/hfleury/horsemarketplacebk/internal/auth/models"
-	"github.com/hfleury/horsemarketplacebk/internal/auth/repositories"
+	mockrepositories "github.com/hfleury/horsemarketplacebk/internal/mocks/auth/repositories"
+	mockconfig "github.com/hfleury/horsemarketplacebk/internal/mocks/config"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -18,9 +19,9 @@ func TestRefreshRotatesSession(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	mockUserRepo := repositories.NewMockUserRepository(ctrl)
-	mockSession := repositories.NewMockSessionRepository(ctrl)
-	mockLogger := config.NewMockLogging(ctrl)
+	mockUserRepo := mockrepositories.NewMockUserRepository(ctrl)
+	mockSession := mockrepositories.NewMockSessionRepository(ctrl)
+	mockLogger := mockconfig.NewMockLogging(ctrl)
 	// allow any log calls from service during test
 	mockLogger.EXPECT().Log(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
@@ -70,9 +71,9 @@ func TestRefreshDetectsReuseAndRevokesAll(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	mockUserRepo := repositories.NewMockUserRepository(ctrl)
-	mockSession := repositories.NewMockSessionRepository(ctrl)
-	mockLogger := config.NewMockLogging(ctrl)
+	mockUserRepo := mockrepositories.NewMockUserRepository(ctrl)
+	mockSession := mockrepositories.NewMockSessionRepository(ctrl)
+	mockLogger := mockconfig.NewMockLogging(ctrl)
 	// allow any log calls from service during test
 	mockLogger.EXPECT().Log(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 

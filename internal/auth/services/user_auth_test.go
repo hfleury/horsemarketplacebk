@@ -9,7 +9,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/hfleury/horsemarketplacebk/config"
 	"github.com/hfleury/horsemarketplacebk/internal/auth/models"
-	"github.com/hfleury/horsemarketplacebk/internal/auth/repositories"
+	mockrepositories "github.com/hfleury/horsemarketplacebk/internal/mocks/auth/repositories"
+	mockconfig "github.com/hfleury/horsemarketplacebk/internal/mocks/config"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -22,8 +23,8 @@ func TestLoginCreatesSession(t *testing.T) {
 	defer ctrl.Finish()
 
 	// Prepare mocks
-	mockUserRepo := repositories.NewMockUserRepository(ctrl)
-	mockLogger := config.NewMockLogging(ctrl)
+	mockUserRepo := mockrepositories.NewMockUserRepository(ctrl)
+	mockLogger := mockconfig.NewMockLogging(ctrl)
 	// allow any log calls from service during test
 	mockLogger.EXPECT().Log(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
@@ -52,7 +53,7 @@ func TestLoginCreatesSession(t *testing.T) {
 	cfg := &config.AllConfiguration{PasetoKey: "01234567890123456789012345678901"} // 32 bytes
 	tokenService := NewTokenService(cfg, mockLogger)
 
-	mockSession := repositories.NewMockSessionRepository(ctrl)
+	mockSession := mockrepositories.NewMockSessionRepository(ctrl)
 	var capturedToken string
 	mockSession.EXPECT().Create(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, uid, token, expires string) error {
 		capturedToken = token
@@ -81,13 +82,13 @@ func TestLogoutRevokesSession(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	mockUserRepo := repositories.NewMockUserRepository(ctrl)
-	mockLogger := config.NewMockLogging(ctrl)
+	mockUserRepo := mockrepositories.NewMockUserRepository(ctrl)
+	mockLogger := mockconfig.NewMockLogging(ctrl)
 	// allow any log calls from service during test
 	mockLogger.EXPECT().Log(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 	tokenService := (*TokenService)(nil)
 
-	mockSession := repositories.NewMockSessionRepository(ctrl)
+	mockSession := mockrepositories.NewMockSessionRepository(ctrl)
 	testToken := "test-refresh-token"
 	mockSession.EXPECT().Revoke(gomock.Any(), testToken).Return(nil)
 

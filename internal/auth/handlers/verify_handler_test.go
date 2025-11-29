@@ -7,8 +7,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/golang/mock/gomock"
-	"github.com/hfleury/horsemarketplacebk/config"
-	"github.com/hfleury/horsemarketplacebk/internal/auth/services"
+	mockconfig "github.com/hfleury/horsemarketplacebk/internal/mocks/config"
+	mockservices "github.com/hfleury/horsemarketplacebk/internal/mocks/services"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -17,10 +17,10 @@ func TestVerifyHandler_Success(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	mockLogger := config.NewMockLogging(ctrl)
+	mockLogger := mockconfig.NewMockLogging(ctrl)
 	mockLogger.EXPECT().GetLoggerFromContext(gomock.Any()).Return(mockLogger).AnyTimes()
 	mockLogger.EXPECT().Log(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
-	mockService := services.NewMockUserServiceInterface(ctrl)
+	mockService := mockservices.NewMockUserServiceInterface(ctrl)
 	handler := &UserHandler{logger: mockLogger, userService: mockService}
 
 	// Expect VerifyEmail to be called with the token
@@ -41,10 +41,10 @@ func TestVerifyHandler_Error(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	mockLogger := config.NewMockLogging(ctrl)
+	mockLogger := mockconfig.NewMockLogging(ctrl)
 	mockLogger.EXPECT().GetLoggerFromContext(gomock.Any()).Return(mockLogger).AnyTimes()
 	mockLogger.EXPECT().Log(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
-	mockService := services.NewMockUserServiceInterface(ctrl)
+	mockService := mockservices.NewMockUserServiceInterface(ctrl)
 	handler := &UserHandler{logger: mockLogger, userService: mockService}
 
 	mockService.EXPECT().VerifyEmail(gomock.Any(), "badtoken").Return(assert.AnError)

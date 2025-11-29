@@ -8,6 +8,7 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/hfleury/horsemarketplacebk/config"
 	"github.com/hfleury/horsemarketplacebk/internal/db"
+	mockconfig "github.com/hfleury/horsemarketplacebk/internal/mocks/config"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 )
@@ -15,7 +16,7 @@ import (
 func TestInitializeApp(t *testing.T) {
 	ctrl := gomock.NewController(t)
 
-	mockConfig := config.NewMockConfiguration(ctrl)
+	mockConfig := mockconfig.NewMockConfiguration(ctrl)
 
 	mockConfig.EXPECT().LoadConfiguration().Times(1)
 	mockConfig.EXPECT().GetConfig().Return(&config.AllConfiguration{
@@ -27,7 +28,7 @@ func TestInitializeApp(t *testing.T) {
 			Port:     "5432",
 			SSLMode:  "disable",
 		},
-	}).Times(2)
+	}).Times(3)
 
 	ctx := context.Background()
 
@@ -44,7 +45,7 @@ func TestInitializeApp(t *testing.T) {
 func TestInitializeApp_DBError(t *testing.T) {
 	ctrl := gomock.NewController(t)
 
-	mockConfig := config.NewMockConfiguration(ctrl)
+	mockConfig := mockconfig.NewMockConfiguration(ctrl)
 
 	mockConfig.EXPECT().LoadConfiguration().Times(1)
 	mockConfig.EXPECT().GetConfig().Return(&config.AllConfiguration{
@@ -83,7 +84,7 @@ func (m *MockServer) Run(addr ...string) error {
 func TestLauncher_Run(t *testing.T) {
 	ctrl := gomock.NewController(t)
 
-	mockConfig := config.NewMockConfiguration(ctrl)
+	mockConfig := mockconfig.NewMockConfiguration(ctrl)
 
 	// No expectations on mockConfig because run() just passes it to initializeAppFunc
 	// and our mock initializeAppFunc doesn't use it.
@@ -113,7 +114,7 @@ func TestLauncher_Run(t *testing.T) {
 
 func TestLauncher_Run_InitializeAppError(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	mockConfig := config.NewMockConfiguration(ctrl)
+	mockConfig := mockconfig.NewMockConfiguration(ctrl)
 	ctx := context.Background()
 	mockDBFactory := func(config *config.AllConfiguration, logger zerolog.Logger) (*db.PsqlDB, error) {
 		return &db.PsqlDB{}, nil
@@ -133,7 +134,7 @@ func TestLauncher_Run_InitializeAppError(t *testing.T) {
 
 func TestLauncher_Run_ServerRunError(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	mockConfig := config.NewMockConfiguration(ctrl)
+	mockConfig := mockconfig.NewMockConfiguration(ctrl)
 	ctx := context.Background()
 	mockDBFactory := func(config *config.AllConfiguration, logger zerolog.Logger) (*db.PsqlDB, error) {
 		return &db.PsqlDB{}, nil

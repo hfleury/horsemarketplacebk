@@ -9,7 +9,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/hfleury/horsemarketplacebk/config"
 	"github.com/hfleury/horsemarketplacebk/internal/auth/models"
-	"github.com/hfleury/horsemarketplacebk/internal/auth/repositories"
+	mockrepositories "github.com/hfleury/horsemarketplacebk/internal/mocks/auth/repositories"
+	mockconfig "github.com/hfleury/horsemarketplacebk/internal/mocks/config"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -43,7 +44,7 @@ func TestCreateUser_success(t *testing.T) {
 		UpdatedAt:    &timeNow,
 	}
 
-	mockUserRepo := repositories.NewMockUserRepository(ctrl)
+	mockUserRepo := mockrepositories.NewMockUserRepository(ctrl)
 	mockUserRepo.EXPECT().IsUsernameTaken(ctx, *userRequest.Username).Return(false, nil).Times(1)
 	mockUserRepo.EXPECT().IsEmailTaken(ctx, *userRequest.Email).Return(false, nil).Times(1)
 	mockUserRepo.EXPECT().Insert(ctx, gomock.Any()).DoAndReturn(func(ctx context.Context, user *models.User) (*models.User, error) {
@@ -54,7 +55,7 @@ func TestCreateUser_success(t *testing.T) {
 		return expectedUser, nil
 	}).Times(1)
 
-	mockZipperService := config.NewMockLogging(ctrl)
+	mockZipperService := mockconfig.NewMockLogging(ctrl)
 	mockZipperService.EXPECT().Log(ctx, config.InfoLevel, "Username in use", gomock.Any()).AnyTimes()
 	mockZipperService.EXPECT().Log(ctx, config.InfoLevel, "Email in use", gomock.Any()).AnyTimes()
 
@@ -76,8 +77,8 @@ func TestCreateUser_fail_username_nil(t *testing.T) {
 		PasswordHash: rtnStringPointer("p4ssw[]rd"),
 	}
 
-	mockUserRepo := repositories.NewMockUserRepository(ctrl)
-	mockZipperService := config.NewMockLogging(ctrl)
+	mockUserRepo := mockrepositories.NewMockUserRepository(ctrl)
+	mockZipperService := mockconfig.NewMockLogging(ctrl)
 	// Allow any log calls because the service logs validation errors
 	mockZipperService.EXPECT().Log(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
@@ -99,10 +100,10 @@ func TestCreateUser_fail_username_exist(t *testing.T) {
 		PasswordHash: rtnStringPointer("p4ssw[]rd"),
 	}
 
-	mockUserRepo := repositories.NewMockUserRepository(ctrl)
+	mockUserRepo := mockrepositories.NewMockUserRepository(ctrl)
 	mockUserRepo.EXPECT().IsUsernameTaken(ctx, *userRequest.Username).Return(true, nil).Times(1)
 
-	mockZipperService := config.NewMockLogging(ctrl)
+	mockZipperService := mockconfig.NewMockLogging(ctrl)
 	mockZipperService.EXPECT().Log(ctx, config.InfoLevel, "Username in use", map[string]any{
 		"Message": "Username in use",
 		"Data":    *userRequest.Username,
@@ -126,10 +127,10 @@ func TestCreateUser_fail_email_nil(t *testing.T) {
 		PasswordHash: rtnStringPointer("p4ssw[]rd"),
 	}
 
-	mockUserRepo := repositories.NewMockUserRepository(ctrl)
+	mockUserRepo := mockrepositories.NewMockUserRepository(ctrl)
 	mockUserRepo.EXPECT().IsUsernameTaken(ctx, *userRequest.Username).Return(false, nil).Times(1)
 
-	mockZipperService := config.NewMockLogging(ctrl)
+	mockZipperService := mockconfig.NewMockLogging(ctrl)
 	// Allow any log calls in this test
 	mockZipperService.EXPECT().Log(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 	userService := NewUserService(mockUserRepo, mockZipperService, nil, nil)
@@ -150,11 +151,11 @@ func TestCreateUser_fail_email_exist(t *testing.T) {
 		PasswordHash: rtnStringPointer("p4ssw[]rd"),
 	}
 
-	mockUserRepo := repositories.NewMockUserRepository(ctrl)
+	mockUserRepo := mockrepositories.NewMockUserRepository(ctrl)
 	mockUserRepo.EXPECT().IsUsernameTaken(ctx, *userRequest.Username).Return(false, nil).Times(1)
 	mockUserRepo.EXPECT().IsEmailTaken(ctx, *userRequest.Email).Return(true, nil).Times(1)
 
-	mockZipperService := config.NewMockLogging(ctrl)
+	mockZipperService := mockconfig.NewMockLogging(ctrl)
 	mockZipperService.EXPECT().Log(ctx, config.InfoLevel, "Email in use", map[string]any{
 		"Message": "Email in use",
 		"Data":    *userRequest.Username,
@@ -178,10 +179,10 @@ func TestCreateUser_fail_password_missing_specialchar(t *testing.T) {
 		PasswordHash: rtnStringPointer("p4sswrd"),
 	}
 
-	mockUserRepo := repositories.NewMockUserRepository(ctrl)
+	mockUserRepo := mockrepositories.NewMockUserRepository(ctrl)
 	mockUserRepo.EXPECT().IsUsernameTaken(ctx, *userRequest.Username).Return(false, nil).Times(1)
 	mockUserRepo.EXPECT().IsEmailTaken(ctx, *userRequest.Email).Return(false, nil).Times(1)
-	mockZipperService := config.NewMockLogging(ctrl)
+	mockZipperService := mockconfig.NewMockLogging(ctrl)
 	// Allow any log calls in this test
 	mockZipperService.EXPECT().Log(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
@@ -203,10 +204,10 @@ func TestCreateUser_fail_password_missing_number(t *testing.T) {
 		PasswordHash: rtnStringPointer("psswrd"),
 	}
 
-	mockUserRepo := repositories.NewMockUserRepository(ctrl)
+	mockUserRepo := mockrepositories.NewMockUserRepository(ctrl)
 	mockUserRepo.EXPECT().IsUsernameTaken(ctx, *userRequest.Username).Return(false, nil).Times(1)
 	mockUserRepo.EXPECT().IsEmailTaken(ctx, *userRequest.Email).Return(false, nil).Times(1)
-	mockZipperService := config.NewMockLogging(ctrl)
+	mockZipperService := mockconfig.NewMockLogging(ctrl)
 	// Allow any log calls in this test
 	mockZipperService.EXPECT().Log(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
@@ -228,10 +229,10 @@ func TestCreateUser_fail_password_missing_letter(t *testing.T) {
 		PasswordHash: rtnStringPointer("[][44]"),
 	}
 
-	mockUserRepo := repositories.NewMockUserRepository(ctrl)
+	mockUserRepo := mockrepositories.NewMockUserRepository(ctrl)
 	mockUserRepo.EXPECT().IsUsernameTaken(ctx, *userRequest.Username).Return(false, nil).Times(1)
 	mockUserRepo.EXPECT().IsEmailTaken(ctx, *userRequest.Email).Return(false, nil).Times(1)
-	mockZipperService := config.NewMockLogging(ctrl)
+	mockZipperService := mockconfig.NewMockLogging(ctrl)
 	// Allow any log calls in this test
 	mockZipperService.EXPECT().Log(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
