@@ -77,3 +77,18 @@ func (mr *MockEmailVerificationRepositoryMockRecorder) SelectByToken(ctx, token 
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SelectByToken", reflect.TypeOf((*MockEmailVerificationRepository)(nil).SelectByToken), ctx, token)
 }
+
+// GetLatestByEmail mocks base method.
+func (m *MockEmailVerificationRepository) GetLatestByEmail(ctx context.Context, email string) (*models.EmailVerification, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetLatestByEmail", ctx, email)
+	ret0, _ := ret[0].(*models.EmailVerification)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetLatestByEmail indicates an expected call of GetLatestByEmail.
+func (mr *MockEmailVerificationRepositoryMockRecorder) GetLatestByEmail(ctx, email interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetLatestByEmail", reflect.TypeOf((*MockEmailVerificationRepository)(nil).GetLatestByEmail), ctx, email)
+}
