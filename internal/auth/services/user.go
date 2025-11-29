@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -46,11 +47,17 @@ func (us *UserService) SetEmailVerificationRepo(r repositories.EmailVerification
 
 func (us *UserService) CreateUser(ctx context.Context, userRequest models.UserCreateResquest) (*models.User, error) {
 	user := models.User{}
-	if userRequest.Username == nil {
+	if userRequest.Username == nil || userRequest.PasswordHash == nil {
+		us.logger.Log(ctx, config.InfoLevel, "Username or email missing", map[string]any{
+			"Message": "Username or email missing",
+		})
 		return nil, errors.New("username and email cannot be empty")
 	} else {
 		exist, err := us.userRepo.IsUsernameTaken(ctx, *userRequest.Username)
 		if err != nil {
+			us.logger.Log(ctx, config.ErrorLevel, "Error checking if username is taken", map[string]any{
+				"Error": err.Error(),
+			})
 			return nil, err
 		}
 
@@ -66,10 +73,16 @@ func (us *UserService) CreateUser(ctx context.Context, userRequest models.UserCr
 	}
 
 	if userRequest.Email == nil {
+		us.logger.Log(ctx, config.InfoLevel, "Username or email missing", map[string]any{
+			"Message": "Username or email missing",
+		})
 		return nil, errors.New("username and email cannot be empty")
 	} else {
 		exist, err := us.userRepo.IsEmailTaken(ctx, *userRequest.Email)
 		if err != nil {
+			us.logger.Log(ctx, config.ErrorLevel, "Error checking if email is taken", map[string]any{
+				"Error": err.Error(),
+			})
 			return nil, err
 		}
 
@@ -86,11 +99,17 @@ func (us *UserService) CreateUser(ctx context.Context, userRequest models.UserCr
 
 	err := us.validatePassword(*userRequest.PasswordHash)
 	if err != nil {
+		us.logger.Log(ctx, config.InfoLevel, "Invalid password", map[string]any{
+			"Error": err.Error(),
+		})
 		return nil, err
 	}
 
 	passHashed, err := us.hashPassword(ctx, *userRequest.PasswordHash)
 	if err != nil {
+		us.logger.Log(ctx, config.ErrorLevel, "Error hashing password", map[string]any{
+			"Error": err.Error(),
+		})
 		return nil, err
 	}
 
@@ -98,6 +117,9 @@ func (us *UserService) CreateUser(ctx context.Context, userRequest models.UserCr
 
 	userCreated, err := us.userRepo.Insert(ctx, &user)
 	if err != nil {
+		us.logger.Log(ctx, config.ErrorLevel, "Error inserting user", map[string]any{
+			"Error": err.Error(),
+		})
 		return nil, err
 	}
 
@@ -120,10 +142,20 @@ func (us *UserService) CreateUser(ctx context.Context, userRequest models.UserCr
 		verifyLink := fmt.Sprintf("/api/v1/auth/verify?token=%s", verificationToken)
 		body := fmt.Sprintf("Hello %s,\n\nPlease verify your email by visiting the following link:\n%s\n\nIf you did not sign up, ignore this message.", func() string {
 			if userCreated.Username != nil {
+				us.logger.Log(ctx, config.InfoLevel, "Preparing verification email", map[string]any{
+					"email": *userCreated.Email,
+				})
 				return *userCreated.Username
 			}
 			return "user"
 		}(), verifyLink)
+
+		// Log attempt to send verification email with token and link for debugging
+		us.logger.Log(ctx, config.InfoLevel, "attempting to send verification email", map[string]any{
+			"email":              *userCreated.Email,
+			"verification_token": verificationToken,
+			"verification_link":  verifyLink,
+		})
 
 		if err := us.emailSender.Send(ctx, *userCreated.Email, "Verify your HorseMarketplace email", body); err != nil {
 			us.logger.Log(ctx, config.ErrorLevel, "failed to send verification email", map[string]any{"error": err.Error()})
@@ -204,13 +236,34 @@ func (us *UserService) Login(ctx context.Context, userLogin models.UserLogin) (*
 		return nil, errors.New("username and password must be provided")
 	}
 
-	user := &models.User{Username: userLogin.Username}
-	user, err := us.userRepo.SelectUserByUsername(ctx, user)
-	if err != nil {
-		us.logger.Log(ctx, config.InfoLevel, "Invalid credentials", map[string]any{
-			"Message": "Invalid credentials",
-		})
-		return nil, errors.New("invalid credentials")
+	// Support login by either username or email. The frontend may submit a username
+	// that is actually an email address. First attempt lookup by username; if not
+	// found and the input looks like an email address, try lookup by email. This
+	// avoids requiring the client to know which one the user provided.
+	input := *userLogin.Username
+	var (
+		user *models.User
+		err  error
+	)
+
+	// If input contains an @, prefer email lookup
+	if strings.Contains(input, "@") {
+		user, err = us.userRepo.SelectUserByEmail(ctx, &models.User{Email: &input})
+		if err != nil {
+			us.logger.Log(ctx, config.InfoLevel, "Invalid credentials", map[string]any{"Message": "Invalid credentials"})
+			return nil, errors.New("invalid credentials")
+		}
+	} else {
+		// try username first
+		user, err = us.userRepo.SelectUserByUsername(ctx, &models.User{Username: &input})
+		if err != nil {
+			// fallback: try email lookup in case the client provided an email without @ (unlikely)
+			user, err = us.userRepo.SelectUserByEmail(ctx, &models.User{Email: &input})
+			if err != nil {
+				us.logger.Log(ctx, config.InfoLevel, "Invalid credentials", map[string]any{"Message": "Invalid credentials"})
+				return nil, errors.New("invalid credentials")
+			}
+		}
 	}
 
 	err = bcrypt.CompareHashAndPassword([]byte(*user.PasswordHash), []byte(*userLogin.PasswordHash))
@@ -354,5 +407,76 @@ func (us *UserService) VerifyEmail(ctx context.Context, token string) error {
 		}
 	}
 
+	return nil
+}
+
+// ResendVerification creates a new verification token for the given email and sends
+// a verification email. To avoid leaking which emails exist, the handler may
+// return a generic response; this method logs useful details for operators.
+func (us *UserService) ResendVerification(ctx context.Context, email string) error {
+	if us.emailSender == nil || us.emailVerifRepo == nil {
+		us.logger.Log(ctx, config.ErrorLevel, "email sender or verification repo not configured", nil)
+		return errors.New("email sending not configured")
+	}
+
+	// look up user by email
+	user, err := us.userRepo.SelectUserByEmail(ctx, &models.User{Email: &email})
+	if err != nil || user == nil {
+		// Do not reveal existence to callers, just log and return nil to indicate request accepted
+		us.logger.Log(ctx, config.InfoLevel, "resend verification requested for unknown email", map[string]any{"email": email, "error": func() string {
+			if err != nil {
+				return err.Error()
+			}
+			return ""
+		}()})
+		return nil
+	}
+
+	// if already verified, nothing to do
+	if user.IsVerified != nil && *user.IsVerified {
+		us.logger.Log(ctx, config.InfoLevel, "resend verification requested for already verified user", map[string]any{"email": email, "user_id": user.Id})
+		return nil
+	}
+
+	// optional rate-limit: check last request time and refuse if too recent (e.g., within 1 minute)
+	if last, err := us.emailVerifRepo.GetLatestByEmail(ctx, email); err == nil && last != nil && last.RequestedAt != nil {
+		if time.Since(*last.RequestedAt) < time.Minute {
+			us.logger.Log(ctx, config.InfoLevel, "resend verification rate limited", map[string]any{"email": email})
+			return errors.New("please wait a moment before requesting another verification email")
+		}
+	}
+
+	verificationToken := uuid.New().String()
+	now := time.Now().UTC()
+	expiry := now.Add(48 * time.Hour)
+	ev := &models.EmailVerification{
+		UserId:            user.Id,
+		VerificationToken: &verificationToken,
+		Email:             user.Email,
+		RequestedAt:       &now,
+		ExpiresAt:         &expiry,
+	}
+
+	if _, err := us.emailVerifRepo.Create(ctx, ev); err != nil {
+		us.logger.Log(ctx, config.ErrorLevel, "failed to persist email verification (resend)", map[string]any{"error": err.Error(), "email": email})
+		return err
+	}
+
+	verifyLink := fmt.Sprintf("/api/v1/auth/verify?token=%s", verificationToken)
+	body := fmt.Sprintf("Hello %s,\n\nPlease verify your email by visiting the following link:\n%s\n\nIf you did not request this, ignore this message.", func() string {
+		if user.Username != nil {
+			return *user.Username
+		}
+		return "user"
+	}(), verifyLink)
+
+	us.logger.Log(ctx, config.InfoLevel, "attempting to send verification email (resend)", map[string]any{"email": email, "verification_token": verificationToken, "verification_link": verifyLink})
+
+	if err := us.emailSender.Send(ctx, email, "Verify your HorseMarketplace email", body); err != nil {
+		us.logger.Log(ctx, config.ErrorLevel, "failed to send verification email (resend)", map[string]any{"error": err.Error(), "email": email})
+		return err
+	}
+
+	us.logger.Log(ctx, config.InfoLevel, "sent verification email (resend)", map[string]any{"email": email})
 	return nil
 }

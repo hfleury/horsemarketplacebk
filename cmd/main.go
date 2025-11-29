@@ -56,16 +56,24 @@ func initializeApp(ctx context.Context, configService config.Configuration, newD
 	// Email verification repository
 	emailVerifRepo := repositories.NewEmailVerificationRepoPsql(db, logger)
 	userService.SetEmailVerificationRepo(emailVerifRepo)
-
-	// Email sender: prefer Mailgun if env vars provided, otherwise use MockSender for local/dev
-	mailgunDomain := os.Getenv("MAILGUN_DOMAIN")
-	mailgunAPIKey := os.Getenv("MAILGUN_API_KEY")
-	mailFrom := os.Getenv("MAIL_FROM")
+	// Email sender selection (in order): SMTP config, Mailgun env, Mock (dev)
+	cfg := configService.GetConfig()
 	var sender email.Sender
-	if mailgunDomain != "" && mailgunAPIKey != "" && mailFrom != "" {
-		sender = email.NewMailgunSender(mailgunDomain, mailgunAPIKey, mailFrom, 10*time.Second)
+	if cfg.SMTP.Host != "" && cfg.SMTP.Port != "" && cfg.SMTP.From != "" {
+		// parse port
+		port := 25
+		fmt.Sscanf(cfg.SMTP.Port, "%d", &port)
+		sender = email.NewSMTPSender(cfg.SMTP.Host, port, cfg.SMTP.Username, cfg.SMTP.Password, cfg.SMTP.From)
 	} else {
-		sender = email.NewMockSender()
+		// fallback to Mailgun if configured via env (keeps previous behavior)
+		mailgunDomain := os.Getenv("MAILGUN_DOMAIN")
+		mailgunAPIKey := os.Getenv("MAILGUN_API_KEY")
+		mailFrom := os.Getenv("MAIL_FROM")
+		if mailgunDomain != "" && mailgunAPIKey != "" && mailFrom != "" {
+			sender = email.NewMailgunSender(mailgunDomain, mailgunAPIKey, mailFrom, 10*time.Second)
+		} else {
+			sender = email.NewMockSender()
+		}
 	}
 	userService.SetEmailSender(sender)
 

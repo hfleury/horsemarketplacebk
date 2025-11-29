@@ -21,6 +21,8 @@ func TestRefreshRotatesSession(t *testing.T) {
 	mockUserRepo := repositories.NewMockUserRepository(ctrl)
 	mockSession := repositories.NewMockSessionRepository(ctrl)
 	mockLogger := config.NewMockLogging(ctrl)
+	// allow any log calls from service during test
+	mockLogger.EXPECT().Log(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
 	// prepare a user
 	uid := uuid.New()
@@ -71,6 +73,8 @@ func TestRefreshDetectsReuseAndRevokesAll(t *testing.T) {
 	mockUserRepo := repositories.NewMockUserRepository(ctrl)
 	mockSession := repositories.NewMockSessionRepository(ctrl)
 	mockLogger := config.NewMockLogging(ctrl)
+	// allow any log calls from service during test
+	mockLogger.EXPECT().Log(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
 	cfg := &config.AllConfiguration{PasetoKey: "01234567890123456789012345678901"}
 	tokenService := NewTokenService(cfg, mockLogger)

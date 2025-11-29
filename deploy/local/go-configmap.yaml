@@ -11,3 +11,9 @@ data:
   PSQL_PASSWORD: "@EUZ29tmw-yr2jnZY8M@"
   PSQL_SSLMODE: "disable"
   PASETO_KEY: "0d2734c1bd19f2f273201165ca321914"
+  # SMTP (MailHog) - local testing
+  SMTP_HOST: "mailhog"
+  SMTP_PORT: "1025"
+  SMTP_USERNAME: ""
+  SMTP_PASSWORD: ""
+  MAIL_FROM: "no-reply@example.local"

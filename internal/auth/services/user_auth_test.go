@@ -24,6 +24,8 @@ func TestLoginCreatesSession(t *testing.T) {
 	// Prepare mocks
 	mockUserRepo := repositories.NewMockUserRepository(ctrl)
 	mockLogger := config.NewMockLogging(ctrl)
+	// allow any log calls from service during test
+	mockLogger.EXPECT().Log(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
 	// Create a user with hashed password
 	userID := uuid.New()
@@ -81,6 +83,8 @@ func TestLogoutRevokesSession(t *testing.T) {
 
 	mockUserRepo := repositories.NewMockUserRepository(ctrl)
 	mockLogger := config.NewMockLogging(ctrl)
+	// allow any log calls from service during test
+	mockLogger.EXPECT().Log(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 	tokenService := (*TokenService)(nil)
 
 	mockSession := repositories.NewMockSessionRepository(ctrl)

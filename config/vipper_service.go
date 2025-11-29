@@ -29,6 +29,13 @@ func (vs *VipperService) LoadConfiguration() {
 	vs.Config.PasetoKey = viper.GetString("PASETO_KEY")
 	vs.Config.Env = viper.GetString("ENVIRONMENT")
 
+	// SMTP / mail settings (optional)
+	vs.Config.SMTP.Host = viper.GetString("SMTP_HOST")
+	vs.Config.SMTP.Port = viper.GetString("SMTP_PORT")
+	vs.Config.SMTP.Username = viper.GetString("SMTP_USERNAME")
+	vs.Config.SMTP.Password = viper.GetString("SMTP_PASSWORD")
+	vs.Config.SMTP.From = viper.GetString("MAIL_FROM")
+
 	// Log loaded configuration for debugging
 	log.Printf("Loaded configuration: %+v", vs.Config)
 

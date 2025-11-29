@@ -16,6 +16,7 @@ func registerUserRoutes(router *gin.Engine, logger config.Logging, userService *
 		{
 			authRoutes.POST("/users", userHandler.CreateUser)
 			authRoutes.GET("/users", userHandler.GetUserByUsername)
+			authRoutes.POST("/resend-verification", userHandler.ResendVerification)
 			authRoutes.POST("/login", userHandler.Login)
 			authRoutes.POST("/logout", userHandler.Logout)
 			authRoutes.POST("/refresh", userHandler.Refresh)

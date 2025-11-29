@@ -2,6 +2,7 @@ package email
 
 import (
 	"context"
+	"log"
 	"time"
 
 	mailgun "github.com/mailgun/mailgun-go/v4"
@@ -28,9 +29,16 @@ func (m *MailgunSender) Send(ctx context.Context, to, subject, body string) erro
 	mg := mailgun.NewMailgun(m.Domain, m.APIKey)
 	msg := mg.NewMessage(m.From, subject, body, to)
 
+	log.Printf("[MailgunSender] sending email to=%s domain=%s from=%s", to, m.Domain, m.From)
+
 	ctxWithTimeout, cancel := context.WithTimeout(ctx, m.Timeout)
 	defer cancel()
 
-	_, _, err := mg.Send(ctxWithTimeout, msg)
-	return err
+	_, id, err := mg.Send(ctxWithTimeout, msg)
+	if err != nil {
+		log.Printf("[MailgunSender] send error: %v", err)
+		return err
+	}
+	log.Printf("[MailgunSender] sent email id=%s to=%s", id, to)
+	return nil
 }

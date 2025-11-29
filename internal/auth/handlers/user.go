@@ -3,6 +3,7 @@ package handlers
 import (
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -50,8 +51,18 @@ func (h *UserHandler) CreateUser(c *gin.Context) {
 			"error": err.Error(),
 		})
 
+		// Determine if this is a client-side validation/duplicate error and return 400
+		msg := err.Error()
 		response.Status = "error"
+		if strings.Contains(strings.ToLower(msg), "already in use") || strings.Contains(strings.ToLower(msg), "cannot be empty") || strings.Contains(strings.ToLower(msg), "password") {
+			response.Message = msg
+			c.JSON(http.StatusBadRequest, response)
+			return
+		}
+
+		// Unknown server error
 		response.Message = "Failed to create user"
+		response.Error = msg
 		c.JSON(http.StatusInternalServerError, response)
 		return
 	}
@@ -304,5 +315,51 @@ func (h *UserHandler) Verify(c *gin.Context) {
 
 	response.Status = "success"
 	response.Message = "Email verified"
+	c.JSON(http.StatusOK, response)
+}
+
+func (h *UserHandler) ResendVerification(c *gin.Context) {
+	logger := h.logger.GetLoggerFromContext(c)
+	response := common.APIResponse{}
+
+	var body struct {
+		Email *string `json:"email"`
+	}
+
+	if err := c.ShouldBindJSON(&body); err != nil {
+		requestBody, _ := c.Get("request_body")
+		logger.Log(c, config.ErrorLevel, "Failed to bind resend verification request", map[string]any{
+			"error":        err.Error(),
+			"request_body": requestBody,
+		})
+		response.Status = "error"
+		response.Message = "Invalid request body"
+		c.JSON(http.StatusBadRequest, response)
+		return
+	}
+
+	if body.Email == nil || *body.Email == "" {
+		requestBody, _ := c.Get("request_body")
+		logger.Log(c, config.InfoLevel, "Resend verification request missing email", map[string]any{
+			"request_body": requestBody,
+		})
+		response.Status = "error"
+		response.Message = "Invalid request body"
+		c.JSON(http.StatusBadRequest, response)
+		return
+	}
+
+	// Call service; service intentionally returns nil for unknown emails to avoid enumeration
+	if err := h.userService.ResendVerification(c.Request.Context(), *body.Email); err != nil {
+		logger.Log(c, config.ErrorLevel, "Failed to resend verification", map[string]any{"error": err.Error()})
+		response.Status = "error"
+		response.Message = "Failed to resend verification email"
+		response.Error = err.Error()
+		c.JSON(http.StatusInternalServerError, response)
+		return
+	}
+
+	response.Status = "success"
+	response.Message = "If the email exists, a verification message has been sent"
 	c.JSON(http.StatusOK, response)
 }
