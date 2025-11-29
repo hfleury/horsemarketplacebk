@@ -47,6 +47,15 @@ func (us *UserService) SetEmailVerificationRepo(r repositories.EmailVerification
 
 func (us *UserService) CreateUser(ctx context.Context, userRequest models.UserCreateResquest) (*models.User, error) {
 	user := models.User{}
+	// Normalize inputs: trim username and normalize email to lowercase
+	if userRequest.Username != nil {
+		u := strings.TrimSpace(*userRequest.Username)
+		userRequest.Username = &u
+	}
+	if userRequest.Email != nil {
+		e := strings.ToLower(strings.TrimSpace(*userRequest.Email))
+		userRequest.Email = &e
+	}
 	if userRequest.Username == nil || userRequest.PasswordHash == nil {
 		us.logger.Log(ctx, config.InfoLevel, "Username or email missing", map[string]any{
 			"Message": "Username or email missing",
@@ -240,7 +249,7 @@ func (us *UserService) Login(ctx context.Context, userLogin models.UserLogin) (*
 	// that is actually an email address. First attempt lookup by username; if not
 	// found and the input looks like an email address, try lookup by email. This
 	// avoids requiring the client to know which one the user provided.
-	input := *userLogin.Username
+	input := strings.TrimSpace(*userLogin.Username)
 	var (
 		user *models.User
 		err  error
@@ -248,17 +257,21 @@ func (us *UserService) Login(ctx context.Context, userLogin models.UserLogin) (*
 
 	// If input contains an @, prefer email lookup
 	if strings.Contains(input, "@") {
-		user, err = us.userRepo.SelectUserByEmail(ctx, &models.User{Email: &input})
+		// normalize email before lookup
+		e := strings.ToLower(input)
+		user, err = us.userRepo.SelectUserByEmail(ctx, &models.User{Email: &e})
 		if err != nil {
 			us.logger.Log(ctx, config.InfoLevel, "Invalid credentials", map[string]any{"Message": "Invalid credentials"})
 			return nil, errors.New("invalid credentials")
 		}
 	} else {
 		// try username first
-		user, err = us.userRepo.SelectUserByUsername(ctx, &models.User{Username: &input})
+		u := input
+		user, err = us.userRepo.SelectUserByUsername(ctx, &models.User{Username: &u})
 		if err != nil {
 			// fallback: try email lookup in case the client provided an email without @ (unlikely)
-			user, err = us.userRepo.SelectUserByEmail(ctx, &models.User{Email: &input})
+			e := strings.ToLower(input)
+			user, err = us.userRepo.SelectUserByEmail(ctx, &models.User{Email: &e})
 			if err != nil {
 				us.logger.Log(ctx, config.InfoLevel, "Invalid credentials", map[string]any{"Message": "Invalid credentials"})
 				return nil, errors.New("invalid credentials")
@@ -414,6 +427,9 @@ func (us *UserService) VerifyEmail(ctx context.Context, token string) error {
 // a verification email. To avoid leaking which emails exist, the handler may
 // return a generic response; this method logs useful details for operators.
 func (us *UserService) ResendVerification(ctx context.Context, email string) error {
+	// normalize email
+	email = strings.ToLower(strings.TrimSpace(email))
+
 	if us.emailSender == nil || us.emailVerifRepo == nil {
 		us.logger.Log(ctx, config.ErrorLevel, "email sender or verification repo not configured", nil)
 		return errors.New("email sending not configured")
