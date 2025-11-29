@@ -146,6 +146,34 @@ The following environment variables are configured in `.env.local`:
 - `PASETO_KEY`: 0d2734c1bd19f2f273201165ca321914
 - `ENVIRONMENT`: development
 
+### Local SMTP (MailHog)
+
+For local email testing we include a MailHog manifest in `deploy/local/mailhog.yaml` and SMTP settings in the `go-configmap.yaml` so the application can send mail via `mailhog:1025`.
+
+To deploy MailHog to the `development` namespace:
+
+```bash
+# apply namespace and postgres manifests if not already applied
+kubectl apply -f deploy/local/go-namespace.yaml
+kubectl apply -f deploy/local/mailhog.yaml
+kubectl apply -f deploy/local/go-configmap.yaml
+kubectl rollout restart deployment/your-go-deployment -n development
+```
+
+Then open the MailHog UI at:
+
+```
+kubectl port-forward svc/mailhog 8025:8025 -n development
+# then visit http://localhost:8025
+```
+
+The configmap sets:
+- `SMTP_HOST=mailhog`
+- `SMTP_PORT=1025`
+- `MAIL_FROM=no-reply@example.local`
+
+The application reads these via the configuration service and will prefer SMTP when configured. If you prefer not to use MailHog, unset these variables to fall back to the mock sender or configure Mailgun.
+
 ## Troubleshooting
 
 ### Cannot connect to PostgreSQL

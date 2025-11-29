@@ -22,6 +22,9 @@ k8s-apply:
 # Apply PSQL kubernetes manifests 
 k8s-apply-psql:
     kubectl apply -f deploy/local/go-namespace.yaml
+    # Ensure local SMTP (MailHog) and configmap are applied for local email testing
+    kubectl apply -f deploy/local/mailhog.yaml
+    kubectl apply -f deploy/local/go-configmap.yaml
     kubectl apply -f deploy/local/postgres-volume.yaml
     kubectl apply -f deploy/local/postgres-deployment.yaml
     kubectl apply -f deploy/local/postgres-service.yaml

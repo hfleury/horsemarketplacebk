@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"log"
 	"net"
 	"net/smtp"
 	"strings"
@@ -29,6 +30,8 @@ func NewSMTPSender(host string, port int, username, password, from string) *SMTP
 func (s *SMTPSender) Send(ctx context.Context, to, subject, body string) error {
 	addr := fmt.Sprintf("%s:%d", s.Host, s.Port)
 
+	log.Printf("[SMTPSender] sending email to=%s host=%s port=%d from=%s", to, s.Host, s.Port, s.From)
+
 	header := make(map[string]string)
 	header["From"] = s.From
 	header["To"] = to
@@ -47,7 +50,9 @@ func (s *SMTPSender) Send(ctx context.Context, to, subject, body string) error {
 	// Try a direct TLS connection first (common for port 465), otherwise use SendMail.
 	// Establish raw TCP connection and upgrade to TLS if needed.
 	conn, err := net.Dial("tcp", addr)
-	if err == nil {
+	if err != nil {
+		log.Printf("[SMTPSender] tcp dial error: %v; falling back to SendMail", err)
+	} else {
 		// try STARTTLS-like upgrade if server supports it by wrapping in TLS
 		tlsConn := tls.Client(conn, &tls.Config{ServerName: s.Host})
 		if tlsConn != nil {
@@ -59,13 +64,16 @@ func (s *SMTPSender) Send(ctx context.Context, to, subject, body string) error {
 					_ = c.Auth(auth)
 				}
 				if err := c.Mail(s.From); err != nil {
+					log.Printf("[SMTPSender] error MAIL FROM: %v", err)
 					return err
 				}
 				if err := c.Rcpt(to); err != nil {
+					log.Printf("[SMTPSender] error RCPT TO: %v", err)
 					return err
 				}
 				wc, err := c.Data()
 				if err != nil {
+					log.Printf("[SMTPSender] error DATA: %v", err)
 					return err
 				}
 				_, err = wc.Write([]byte(msg.String()))
@@ -74,11 +82,23 @@ func (s *SMTPSender) Send(ctx context.Context, to, subject, body string) error {
 					return err
 				}
 				_ = wc.Close()
-				return c.Quit()
+				qerr := c.Quit()
+				if qerr != nil {
+					log.Printf("[SMTPSender] error during QUIT: %v", qerr)
+					return qerr
+				}
+				log.Printf("[SMTPSender] sent email to %s via TLS connection", to)
+				return nil
 			}
 		}
 	}
 
 	// Fallback to net/smtp.SendMail (this will do STARTTLS when supported)
-	return smtp.SendMail(addr, auth, s.From, []string{to}, []byte(msg.String()))
+	err2 := smtp.SendMail(addr, auth, s.From, []string{to}, []byte(msg.String()))
+	if err2 != nil {
+		log.Printf("[SMTPSender] SendMail fallback error: %v", err2)
+		return err2
+	}
+	log.Printf("[SMTPSender] sent email to %s via SendMail fallback", to)
+	return nil
 }
