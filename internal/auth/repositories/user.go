@@ -1,4 +1,4 @@
-//go:generate mockgen -source=internal/auth/repositories/user.go -destination=internal/auth/repositories/mock_user_psql.go -package=repositories
+//go:generate mockgen -source=user.go -destination=internal/mocks/auth/repositories/mock_user_psql.go -package=mockrepositories
 package repositories
 
 import (

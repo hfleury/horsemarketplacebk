@@ -1,4 +1,4 @@
-//go:generate mockgen -source=config/logging.go -destination=config/mock_zerolog_service.go -package=config
+//go:generate mockgen -source=logging.go -destination=internal/mocks/config/mock_zerolog_service.go -package=mockconfig
 package config
 
 import "context"

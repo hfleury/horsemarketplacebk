@@ -7,9 +7,9 @@ import (
 
 	"github.com/golang/mock/gomock"
 	"github.com/google/uuid"
-	"github.com/hfleury/horsemarketplacebk/config"
 	"github.com/hfleury/horsemarketplacebk/internal/auth/models"
-	"github.com/hfleury/horsemarketplacebk/internal/auth/repositories"
+	mockrepositories "github.com/hfleury/horsemarketplacebk/internal/mocks/auth/repositories"
+	mockconfig "github.com/hfleury/horsemarketplacebk/internal/mocks/config"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -18,10 +18,10 @@ func TestVerifyEmail_Success(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	mockUserRepo := repositories.NewMockUserRepository(ctrl)
-	mockLogger := config.NewMockLogging(ctrl)
+	mockUserRepo := mockrepositories.NewMockUserRepository(ctrl)
+	mockLogger := mockconfig.NewMockLogging(ctrl)
 	mockLogger.EXPECT().Log(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
-	mockEmailVerif := repositories.NewMockEmailVerificationRepository(ctrl)
+	mockEmailVerif := mockrepositories.NewMockEmailVerificationRepository(ctrl)
 
 	us := NewUserService(mockUserRepo, mockLogger, nil, nil)
 	us.SetEmailVerificationRepo(mockEmailVerif)
@@ -47,10 +47,10 @@ func TestVerifyEmail_Expired(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	mockUserRepo := repositories.NewMockUserRepository(ctrl)
-	mockLogger := config.NewMockLogging(ctrl)
+	mockUserRepo := mockrepositories.NewMockUserRepository(ctrl)
+	mockLogger := mockconfig.NewMockLogging(ctrl)
 	mockLogger.EXPECT().Log(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
-	mockEmailVerif := repositories.NewMockEmailVerificationRepository(ctrl)
+	mockEmailVerif := mockrepositories.NewMockEmailVerificationRepository(ctrl)
 
 	us := NewUserService(mockUserRepo, mockLogger, nil, nil)
 	us.SetEmailVerificationRepo(mockEmailVerif)

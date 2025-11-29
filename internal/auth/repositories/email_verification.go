@@ -1,3 +1,4 @@
+//go:generate mockgen -source=email_verification.go -destination=internal/mocks/auth/repositories/mock_email_verification.go -package=mockrepositories
 package repositories
 
 import (
@@ -5,8 +6,6 @@ import (
 
 	"github.com/hfleury/horsemarketplacebk/internal/auth/models"
 )
-
-//go:generate mockgen -source=internal/auth/repositories/email_verification.go -destination=internal/auth/repositories/mock_email_verification.go -package=repositories
 
 type EmailVerificationRepository interface {
 	Create(ctx context.Context, ev *models.EmailVerification) (*models.EmailVerification, error)

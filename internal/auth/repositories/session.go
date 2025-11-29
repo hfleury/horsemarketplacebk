@@ -1,4 +1,4 @@
-//go:generate mockgen -source=internal/auth/repositories/session.go -destination=internal/auth/repositories/mock_session.go -package=repositories
+//go:generate mockgen -source=session.go -destination=internal/mocks/auth/repositories/mock_session.go -package=mockrepositories
 package repositories
 
 import "context"

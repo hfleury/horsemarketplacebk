@@ -15,6 +15,7 @@ import (
 	"github.com/hfleury/horsemarketplacebk/internal/db"
 	"github.com/hfleury/horsemarketplacebk/internal/email"
 	"github.com/hfleury/horsemarketplacebk/internal/middleware"
+	mockemail "github.com/hfleury/horsemarketplacebk/internal/mocks/email"
 	"github.com/hfleury/horsemarketplacebk/internal/router"
 	"github.com/rs/zerolog"
 )
@@ -72,7 +73,8 @@ func initializeApp(ctx context.Context, configService config.Configuration, newD
 		if mailgunDomain != "" && mailgunAPIKey != "" && mailFrom != "" {
 			sender = email.NewMailgunSender(mailgunDomain, mailgunAPIKey, mailFrom, 10*time.Second)
 		} else {
-			sender = email.NewMockSender()
+			// use centralized mock sender
+			sender = mockemail.NewMockSender()
 		}
 	}
 	userService.SetEmailSender(sender)
