@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"bytes"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -12,7 +13,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestVerifyHandler_Success(t *testing.T) {
+func TestResendHandler_Success(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -23,20 +24,19 @@ func TestVerifyHandler_Success(t *testing.T) {
 	mockService := services.NewMockUserServiceInterface(ctrl)
 	handler := &UserHandler{logger: mockLogger, userService: mockService}
 
-	// Expect VerifyEmail to be called with the token
-	mockService.EXPECT().VerifyEmail(gomock.Any(), "tok123").Return(nil)
+	mockService.EXPECT().ResendVerification(gomock.Any(), "user@example.com").Return(nil)
 
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
-	c.Request = httptest.NewRequest("GET", "/api/v1/auth/verify?token=tok123", nil)
-	c.Request.URL.RawQuery = "token=tok123"
+	body := bytes.NewBufferString(`{"email":"user@example.com"}`)
+	c.Request = httptest.NewRequest("POST", "/api/v1/auth/resend-verification", body)
 
-	handler.Verify(c)
+	handler.ResendVerification(c)
 	assert.Equal(t, http.StatusOK, w.Code)
-	assert.Contains(t, w.Body.String(), "Email verified")
+	assert.Contains(t, w.Body.String(), "If the email exists")
 }
 
-func TestVerifyHandler_Error(t *testing.T) {
+func TestResendHandler_Error(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -47,14 +47,14 @@ func TestVerifyHandler_Error(t *testing.T) {
 	mockService := services.NewMockUserServiceInterface(ctrl)
 	handler := &UserHandler{logger: mockLogger, userService: mockService}
 
-	mockService.EXPECT().VerifyEmail(gomock.Any(), "badtoken").Return(assert.AnError)
+	mockService.EXPECT().ResendVerification(gomock.Any(), "user@example.com").Return(assert.AnError)
 
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
-	c.Request = httptest.NewRequest("GET", "/api/v1/auth/verify?token=badtoken", nil)
-	c.Request.URL.RawQuery = "token=badtoken"
+	body := bytes.NewBufferString(`{"email":"user@example.com"}`)
+	c.Request = httptest.NewRequest("POST", "/api/v1/auth/resend-verification", body)
 
-	handler.Verify(c)
-	assert.Equal(t, http.StatusBadRequest, w.Code)
-	assert.Contains(t, w.Body.String(), "Invalid or expired token")
+	handler.ResendVerification(c)
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+	assert.Contains(t, w.Body.String(), "Failed to resend verification")
 }

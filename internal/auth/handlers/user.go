@@ -15,7 +15,7 @@ import (
 
 type UserHandler struct {
 	logger      config.Logging
-	userService *services.UserService
+	userService services.UserServiceInterface
 }
 
 func NewUserHandler(logger config.Logging, userService *services.UserService) *UserHandler {
