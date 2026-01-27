@@ -90,7 +90,7 @@ func initializeApp(ctx context.Context, configService config.Configuration, newD
 	server.Use(middleware.LoggerMiddleware(logger))
 
 	// routes
-	server = router.SetupRouter(server, logger, userService)
+	server = router.SetupRouter(server, logger, userService, tokenService)
 
 	return server, nil
 }

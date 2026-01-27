@@ -97,7 +97,44 @@ just test
 just test-coverage
 ```
 
-## 🔌 API Endpoints
+## �️ Role-Based Access Control (RBAC)
+
+The application implements RBAC with two roles: `admin` and `user` (default).
+
+### Manual Verification
+
+**1. Create a User (Default Role: User)**
+```bash
+curl -X POST http://localhost:8080/api/v1/auth/users \
+  -H "Content-Type: application/json" \
+  -d '{
+    "username": "testrbacusernew",
+    "email": "testrbacnew@example.com",
+    "password": "Password123!"
+  }'
+```
+
+**2. Login to get Token**
+```bash
+curl -X POST http://localhost:8080/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{
+    "username": "testrbacusernew",
+    "password": "Password123!"
+  }'
+```
+
+**3. Access Protected Endpoint**
+```bash
+curl -X GET http://localhost:8080/api/v1/auth/users \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <TOKEN>" \
+  -d '{
+    "username": "testrbacusernew"
+  }'
+```
+
+## �🔌 API Endpoints
 
 All API endpoints are versioned and prefixed with `/api/v1`.
 

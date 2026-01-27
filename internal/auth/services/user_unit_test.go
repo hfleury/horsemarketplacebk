@@ -42,6 +42,7 @@ func TestCreateUser_success(t *testing.T) {
 		LastLogin:    &timeNow,
 		CreatedAt:    &timeNow,
 		UpdatedAt:    &timeNow,
+		Role:         rtnStringPointer("user"),
 	}
 
 	mockUserRepo := mockrepositories.NewMockUserRepository(ctrl)

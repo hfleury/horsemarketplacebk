@@ -6,8 +6,8 @@ import (
 	"github.com/hfleury/horsemarketplacebk/internal/auth/services"
 )
 
-func SetupRouter(router *gin.Engine, logger config.Logging, userService *services.UserService) *gin.Engine {
-	registerUserRoutes(router, logger, userService)
+func SetupRouter(router *gin.Engine, logger config.Logging, userService *services.UserService, tokenService *services.TokenService) *gin.Engine {
+	registerUserRoutes(router, logger, userService, tokenService)
 
 	return router
 }
