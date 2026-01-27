@@ -289,7 +289,11 @@ func (us *UserService) Login(ctx context.Context, userLogin models.UserLogin) (*
 
 	// Create access token (short lived) and refresh session
 	accessTTL := 24 * time.Hour
-	accessToken, err := us.tokenService.CreateToken(user.Id.String(), *user.Username, *user.Email, accessTTL)
+	role := "user"
+	if user.Role != nil {
+		role = *user.Role
+	}
+	accessToken, err := us.tokenService.CreateToken(user.Id.String(), *user.Username, *user.Email, role, accessTTL)
 	if err != nil {
 		us.logger.Log(ctx, config.ErrorLevel, "Failed to create access token", map[string]any{
 			"Error": err.Error(),
@@ -371,7 +375,11 @@ func (us *UserService) Refresh(ctx context.Context, refreshToken string) (string
 		return "", "", "", errors.New("failed to load user")
 	}
 
-	accessToken, err := us.tokenService.CreateToken(user.Id.String(), *user.Username, *user.Email, 15*time.Minute)
+	role := "user"
+	if user.Role != nil {
+		role = *user.Role
+	}
+	accessToken, err := us.tokenService.CreateToken(user.Id.String(), *user.Username, *user.Email, role, 15*time.Minute)
 	if err != nil {
 		return "", "", "", err
 	}

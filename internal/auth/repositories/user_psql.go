@@ -23,22 +23,32 @@ func NewUserRepoPsql(psql db.Database, logger config.Logging) *UserRepoPsql {
 // Insert insert a new user in the database
 func (ur *UserRepoPsql) Insert(ctx context.Context, user *models.User) (*models.User, error) {
 	query := `
-		INSERT INTO authentic.users (username, email, password_hash)
+		INSERT INTO authentic.users (username, email, password_hash, role)
 		VALUES
-		($1, $2, $3)
-		RETURNING id, username, email, password_hash, is_active, is_verified, last_login, created_at, updated_at;
+		($1, $2, $3, $4)
+		RETURNING id, username, email, password_hash, is_active, is_verified, last_login, created_at, updated_at, role;
 	`
 
-	err := ur.psql.QueryRow(ctx, query, user.Username, user.Email, user.PasswordHash).Scan(
-		&user.Id,
-		&user.Username,
-		&user.Email,
-		&user.PasswordHash,
-		&user.IsActive,
-		&user.IsVerified,
-		&user.LastLogin,
-		&user.CreatedAt,
-		&user.UpdatedAt,
+	var createdUser models.User
+	var role string
+	// Check if role is provided, otherwise default to "user"
+	if user.Role != nil {
+		role = *user.Role
+	} else {
+		role = "user"
+	}
+
+	err := ur.psql.QueryRow(ctx, query, user.Username, user.Email, user.PasswordHash, role).Scan(
+		&createdUser.Id,
+		&createdUser.Username,
+		&createdUser.Email,
+		&createdUser.PasswordHash,
+		&createdUser.IsActive,
+		&createdUser.IsVerified,
+		&createdUser.LastLogin,
+		&createdUser.CreatedAt,
+		&createdUser.UpdatedAt,
+		&createdUser.Role,
 	)
 	if err != nil {
 		ur.logger.Log(ctx, config.ErrorLevel, "Failed to insert user", map[string]any{
@@ -49,10 +59,10 @@ func (ur *UserRepoPsql) Insert(ctx context.Context, user *models.User) (*models.
 	}
 
 	ur.logger.Log(ctx, config.InfoLevel, "User inserted successfully", map[string]any{
-		"user_id": user.Id,
+		"user_id": createdUser.Id,
 	})
 
-	return user, nil
+	return &createdUser, nil
 }
 
 // IsUsernameTaken check if the username already exist in the database
@@ -98,7 +108,7 @@ func (ur *UserRepoPsql) IsEmailTaken(ctx context.Context, email string) (bool, e
 // SelectUserByUsername get the user by the username
 func (ur *UserRepoPsql) SelectUserByUsername(ctx context.Context, user *models.User) (*models.User, error) {
 	query := `
-		SELECT id, username, email, password_hash, is_active, is_verified, last_login, created_at, updated_at
+		SELECT id, username, email, password_hash, is_active, is_verified, last_login, created_at, updated_at, role
 		FROM authentic.users
 		WHERE username = $1;
 	`
@@ -112,6 +122,7 @@ func (ur *UserRepoPsql) SelectUserByUsername(ctx context.Context, user *models.U
 		&user.LastLogin,
 		&user.CreatedAt,
 		&user.UpdatedAt,
+		&user.Role,
 	)
 	if err != nil {
 		ur.logger.Log(ctx, config.ErrorLevel, "Failed to get user by username", map[string]any{
@@ -127,7 +138,7 @@ func (ur *UserRepoPsql) SelectUserByUsername(ctx context.Context, user *models.U
 // SelectUserByEmail get the user by email
 func (ur *UserRepoPsql) SelectUserByEmail(ctx context.Context, user *models.User) (*models.User, error) {
 	query := `
-		SELECT id, username, email, password_hash, is_active, is_verified, last_login, created_at, updated_at
+		SELECT id, username, email, password_hash, is_active, is_verified, last_login, created_at, updated_at, role
 		FROM authentic.users
 		WHERE email = $1;
 	`
@@ -141,6 +152,7 @@ func (ur *UserRepoPsql) SelectUserByEmail(ctx context.Context, user *models.User
 		&user.LastLogin,
 		&user.CreatedAt,
 		&user.UpdatedAt,
+		&user.Role,
 	)
 	if err != nil {
 		ur.logger.Log(ctx, config.ErrorLevel, "Failed to get user by username", map[string]any{
@@ -156,7 +168,7 @@ func (ur *UserRepoPsql) SelectUserByEmail(ctx context.Context, user *models.User
 // SelectUserByID returns a user by its ID
 func (ur *UserRepoPsql) SelectUserByID(ctx context.Context, id string) (*models.User, error) {
 	query := `
-		SELECT id, username, email, password_hash, is_active, is_verified, last_login, created_at, updated_at
+		SELECT id, username, email, password_hash, is_active, is_verified, last_login, created_at, updated_at, role
 		FROM authentic.users
 		WHERE id = $1;
 	`
@@ -171,6 +183,7 @@ func (ur *UserRepoPsql) SelectUserByID(ctx context.Context, id string) (*models.
 		&user.LastLogin,
 		&user.CreatedAt,
 		&user.UpdatedAt,
+		&user.Role,
 	)
 	if err != nil {
 		ur.logger.Log(ctx, config.ErrorLevel, "Failed to get user by id", map[string]any{
