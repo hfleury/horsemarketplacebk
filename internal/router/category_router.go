@@ -22,7 +22,7 @@ func registerCategoryRoutes(router *gin.Engine, logger config.Logging, categoryS
 			catRoutes.GET("/search", categoryHandler.GetCategoryByName)
 
 			// Admin protected routes
-			protected := catRoutes.Group("/")
+			protected := catRoutes.Group("")
 			protected.Use(authMiddleware.RequireAuth())
 			protected.Use(authMiddleware.RequireRole("admin"))
 			{
