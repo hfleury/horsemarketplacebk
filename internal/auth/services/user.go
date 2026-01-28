@@ -325,6 +325,7 @@ func (us *UserService) Login(ctx context.Context, userLogin models.UserLogin) (*
 		User: models.UserResponse{
 			Username: *user.Username,
 			Email:    *user.Email,
+			Role:     role,
 		},
 		ExpiresAt:        time.Now().Add(accessTTL).Format(time.RFC3339),
 		RefreshToken:     refreshToken,
@@ -503,4 +504,12 @@ func (us *UserService) ResendVerification(ctx context.Context, email string) err
 
 	us.logger.Log(ctx, config.InfoLevel, "sent verification email (resend)", map[string]any{"email": email})
 	return nil
+}
+
+func (us *UserService) GetAllUsers(ctx context.Context) ([]*models.User, error) {
+	return us.userRepo.FindAll(ctx)
+}
+
+func (us *UserService) UpdateUserStatus(ctx context.Context, id string, isActive bool) error {
+	return us.userRepo.UpdateStatus(ctx, id, isActive)
 }

@@ -16,4 +16,8 @@ type UserRepository interface {
 	SelectUserByID(ctx context.Context, id string) (*models.User, error)
 	// SetVerified updates the user's verified status
 	SetVerified(ctx context.Context, id string, verified bool) error
+	// FindAll returns all users
+	FindAll(ctx context.Context) ([]*models.User, error)
+	// UpdateStatus updates the user's active status
+	UpdateStatus(ctx context.Context, id string, isActive bool) error
 }

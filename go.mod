@@ -17,6 +17,7 @@ require (
 	github.com/go-chi/chi/v5 v5.2.1 // indirect
 	github.com/mailgun/errors v0.4.0 // indirect
 	github.com/sirupsen/logrus v1.9.3 // indirect
+	github.com/stretchr/objx v0.5.2 // indirect
 )
 
 require (

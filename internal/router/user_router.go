@@ -30,5 +30,13 @@ func registerUserRoutes(router *gin.Engine, logger config.Logging, userService *
 				protected.POST("/logout", userHandler.Logout)
 			}
 		}
+
+		adminRoutes := v1.Group("/admin")
+		adminRoutes.Use(authMiddleware.RequireAuth())
+		adminRoutes.Use(authMiddleware.RequireRole("admin"))
+		{
+			adminRoutes.GET("/users", userHandler.GetAllUsers)
+			adminRoutes.POST("/users/:id/block", userHandler.BlockUser)
+		}
 	}
 }

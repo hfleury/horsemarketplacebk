@@ -64,3 +64,27 @@ func (m *AuthMiddleware) RequireAuth() gin.HandlerFunc {
 		c.Next()
 	}
 }
+
+func (m *AuthMiddleware) RequireRole(requiredRole string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		role, exists := c.Get("role")
+		if !exists {
+			c.JSON(http.StatusUnauthorized, common.APIResponse{
+				Status:  "error",
+				Message: "Unauthorized",
+			})
+			c.Abort()
+			return
+		}
+
+		if role != requiredRole {
+			c.JSON(http.StatusForbidden, common.APIResponse{
+				Status:  "error",
+				Message: "Forbidden: insufficient permissions",
+			})
+			c.Abort()
+			return
+		}
+		c.Next()
+	}
+}

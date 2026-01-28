@@ -138,3 +138,32 @@ func (mr *MockUserServiceInterfaceMockRecorder) VerifyEmail(ctx, token interface
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "VerifyEmail", reflect.TypeOf((*MockUserServiceInterface)(nil).VerifyEmail), ctx, token)
 }
+
+// GetAllUsers mocks base method.
+func (m *MockUserServiceInterface) GetAllUsers(ctx context.Context) ([]*models.User, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetAllUsers", ctx)
+	ret0, _ := ret[0].([]*models.User)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetAllUsers indicates an expected call of GetAllUsers.
+func (mr *MockUserServiceInterfaceMockRecorder) GetAllUsers(ctx interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAllUsers", reflect.TypeOf((*MockUserServiceInterface)(nil).GetAllUsers), ctx)
+}
+
+// UpdateUserStatus mocks base method.
+func (m *MockUserServiceInterface) UpdateUserStatus(ctx context.Context, id string, isActive bool) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UpdateUserStatus", ctx, id, isActive)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// UpdateUserStatus indicates an expected call of UpdateUserStatus.
+func (mr *MockUserServiceInterfaceMockRecorder) UpdateUserStatus(ctx, id, isActive interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateUserStatus", reflect.TypeOf((*MockUserServiceInterface)(nil).UpdateUserStatus), ctx, id, isActive)
+}

@@ -15,4 +15,6 @@ type UserServiceInterface interface {
 	Refresh(ctx context.Context, refreshToken string) (string, string, string, error)
 	VerifyEmail(ctx context.Context, token string) error
 	ResendVerification(ctx context.Context, email string) error
+	GetAllUsers(ctx context.Context) ([]*models.User, error)
+	UpdateUserStatus(ctx context.Context, id string, isActive bool) error
 }

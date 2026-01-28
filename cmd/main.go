@@ -10,8 +10,10 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/hfleury/horsemarketplacebk/config"
-	"github.com/hfleury/horsemarketplacebk/internal/auth/repositories"
+	authRepos "github.com/hfleury/horsemarketplacebk/internal/auth/repositories"
 	"github.com/hfleury/horsemarketplacebk/internal/auth/services"
+	categoryRepos "github.com/hfleury/horsemarketplacebk/internal/categories/repositories"
+	categoryServices "github.com/hfleury/horsemarketplacebk/internal/categories/services"
 	"github.com/hfleury/horsemarketplacebk/internal/db"
 	"github.com/hfleury/horsemarketplacebk/internal/email"
 	"github.com/hfleury/horsemarketplacebk/internal/middleware"
@@ -47,15 +49,17 @@ func initializeApp(ctx context.Context, configService config.Configuration, newD
 	logger.Log(ctx, config.InfoLevel, "Application started and logging initialized", nil)
 
 	// Repositories
-	userRepo := repositories.NewUserRepoPsql(db, logger)
-	sessionRepo := repositories.NewSessionRepoPsql(db, logger)
+	userRepo := authRepos.NewUserRepoPsql(db, logger)
+	sessionRepo := authRepos.NewSessionRepoPsql(db, logger)
+	categoryRepo := categoryRepos.NewCategoryRepoPsql(db, logger)
 
 	// Services
 	tokenService := services.NewTokenService(configService.GetConfig(), logger)
 	userService := services.NewUserService(userRepo, logger, tokenService, sessionRepo)
+	categoryService := categoryServices.NewCategoryService(categoryRepo, logger)
 
 	// Email verification repository
-	emailVerifRepo := repositories.NewEmailVerificationRepoPsql(db, logger)
+	emailVerifRepo := authRepos.NewEmailVerificationRepoPsql(db, logger)
 	userService.SetEmailVerificationRepo(emailVerifRepo)
 	// Email sender selection (in order): SMTP config, Mailgun env, Mock (dev)
 	cfg := configService.GetConfig()
@@ -90,7 +94,7 @@ func initializeApp(ctx context.Context, configService config.Configuration, newD
 	server.Use(middleware.LoggerMiddleware(logger))
 
 	// routes
-	server = router.SetupRouter(server, logger, userService, tokenService)
+	server = router.SetupRouter(server, logger, userService, tokenService, categoryService)
 
 	return server, nil
 }

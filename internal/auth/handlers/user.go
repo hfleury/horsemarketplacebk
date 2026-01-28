@@ -363,3 +363,60 @@ func (h *UserHandler) ResendVerification(c *gin.Context) {
 	response.Message = "If the email exists, a verification message has been sent"
 	c.JSON(http.StatusOK, response)
 }
+
+// GetAllUsers returns all users
+func (h *UserHandler) GetAllUsers(c *gin.Context) {
+	logger := h.logger.GetLoggerFromContext(c)
+	response := common.APIResponse{}
+
+	users, err := h.userService.GetAllUsers(c.Request.Context())
+	if err != nil {
+		logger.Log(c, config.ErrorLevel, "Failed to get all users", map[string]any{"error": err.Error()})
+		response.Status = "error"
+		response.Message = "Failed to get all users"
+		c.JSON(http.StatusInternalServerError, response)
+		return
+	}
+
+	response.Status = "success"
+	response.Data = users
+	c.JSON(http.StatusOK, response)
+}
+
+// BlockUser blocks/unblocks a user
+func (h *UserHandler) BlockUser(c *gin.Context) {
+	logger := h.logger.GetLoggerFromContext(c)
+	response := common.APIResponse{}
+
+	userID := c.Param("id")
+	if userID == "" {
+		response.Status = "error"
+		response.Message = "User ID required"
+		c.JSON(http.StatusBadRequest, response)
+		return
+	}
+
+	var body struct {
+		IsActive bool `json:"is_active"`
+	}
+
+	if err := c.ShouldBindJSON(&body); err != nil {
+		logger.Log(c, config.ErrorLevel, "Failed to bind request", map[string]any{"error": err.Error()})
+		response.Status = "error"
+		response.Message = "Invalid request body"
+		c.JSON(http.StatusBadRequest, response)
+		return
+	}
+
+	if err := h.userService.UpdateUserStatus(c.Request.Context(), userID, body.IsActive); err != nil {
+		logger.Log(c, config.ErrorLevel, "Failed to update user status", map[string]any{"error": err.Error()})
+		response.Status = "error"
+		response.Message = "Failed to update user status"
+		c.JSON(http.StatusInternalServerError, response)
+		return
+	}
+
+	response.Status = "success"
+	response.Message = "User status updated"
+	c.JSON(http.StatusOK, response)
+}

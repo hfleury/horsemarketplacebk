@@ -1,0 +1,57 @@
+
+// FindAll returns all users from the database
+func (ur *UserRepoPsql) FindAll(ctx context.Context) ([]*models.User, error) {
+	query := `
+		SELECT id, username, email, password_hash, is_active, is_verified, last_login, created_at, updated_at, role
+		FROM authentic.users
+		ORDER BY created_at DESC;
+	`
+	rows, err := ur.psql.Query(ctx, query)
+	if err != nil {
+		ur.logger.Log(ctx, config.ErrorLevel, "Failed to get all users", map[string]any{
+			"error": err.Error(),
+			"query": query,
+		})
+		return nil, err
+	}
+	defer rows.Close()
+
+	var users []*models.User
+	for rows.Next() {
+		var user models.User
+		err := rows.Scan(
+			&user.Id,
+			&user.Username,
+			&user.Email,
+			&user.PasswordHash,
+			&user.IsActive,
+			&user.IsVerified,
+			&user.LastLogin,
+			&user.CreatedAt,
+			&user.UpdatedAt,
+			&user.Role,
+		)
+		if err != nil {
+			ur.logger.Log(ctx, config.ErrorLevel, "Failed to scan user row", map[string]any{
+				"error": err.Error(),
+			})
+			continue // Skip problematic rows or return error? Continuing seems safer for list.
+		}
+		users = append(users, &user)
+	}
+
+	return users, nil
+}
+
+// UpdateStatus updates the user's active status
+func (ur *UserRepoPsql) UpdateStatus(ctx context.Context, id string, isActive bool) error {
+	query := `UPDATE authentic.users SET is_active = $2, updated_at = NOW() WHERE id = $1`
+	_, err := ur.psql.Execute(ctx, query, id, isActive)
+	if err != nil {
+		ur.logger.Log(ctx, config.ErrorLevel, "Failed to update user status", map[string]any{
+			"error": err.Error(),
+			"id":    id,
+		})
+	}
+	return err
+}
