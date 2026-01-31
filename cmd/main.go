@@ -19,7 +19,11 @@ import (
 	"github.com/hfleury/horsemarketplacebk/internal/media"
 	"github.com/hfleury/horsemarketplacebk/internal/middleware"
 	mockemail "github.com/hfleury/horsemarketplacebk/internal/mocks/email"
+	productHandlers "github.com/hfleury/horsemarketplacebk/internal/products/handlers"
+	productRepos "github.com/hfleury/horsemarketplacebk/internal/products/repositories"
+	productServices "github.com/hfleury/horsemarketplacebk/internal/products/services"
 	"github.com/hfleury/horsemarketplacebk/internal/router"
+	"github.com/hfleury/horsemarketplacebk/internal/system"
 	"github.com/hfleury/horsemarketplacebk/internal/tasks"
 	"github.com/hfleury/horsemarketplacebk/internal/worker"
 	"github.com/hibiken/asynq"
@@ -56,11 +60,17 @@ func initializeApp(ctx context.Context, configService config.Configuration, newD
 	userRepo := authRepos.NewUserRepoPsql(db, logger)
 	sessionRepo := authRepos.NewSessionRepoPsql(db, logger)
 	categoryRepo := categoryRepos.NewCategoryRepoPsql(db, logger)
+	systemSettingsRepo := system.NewSettingsRepoPsql(db, logger)
+	productRepo := productRepos.NewProductRepoPsql(db, logger)
 
 	// Services
 	tokenService := services.NewTokenService(configService.GetConfig(), logger)
 	userService := services.NewUserService(userRepo, logger, tokenService, sessionRepo)
 	categoryService := categoryServices.NewCategoryService(categoryRepo, logger)
+	productService := productServices.NewProductService(productRepo, systemSettingsRepo, logger)
+
+	// Handlers
+	productHandler := productHandlers.NewProductHandler(productService, logger)
 
 	// Asynq Client & Worker
 	redisAddr := os.Getenv("REDIS_ADDR")
@@ -146,7 +156,7 @@ func initializeApp(ctx context.Context, configService config.Configuration, newD
 	server.Use(middleware.LoggerMiddleware(logger))
 
 	// routes
-	server = router.SetupRouter(server, logger, userService, tokenService, categoryService, mediaService)
+	server = router.SetupRouter(server, logger, userService, tokenService, categoryService, mediaService, productService, productHandler)
 
 	return server, nil
 }
