@@ -16,9 +16,13 @@ import (
 	categoryServices "github.com/hfleury/horsemarketplacebk/internal/categories/services"
 	"github.com/hfleury/horsemarketplacebk/internal/db"
 	"github.com/hfleury/horsemarketplacebk/internal/email"
+	"github.com/hfleury/horsemarketplacebk/internal/media"
 	"github.com/hfleury/horsemarketplacebk/internal/middleware"
 	mockemail "github.com/hfleury/horsemarketplacebk/internal/mocks/email"
 	"github.com/hfleury/horsemarketplacebk/internal/router"
+	"github.com/hfleury/horsemarketplacebk/internal/tasks"
+	"github.com/hfleury/horsemarketplacebk/internal/worker"
+	"github.com/hibiken/asynq"
 	"github.com/rs/zerolog"
 )
 
@@ -58,6 +62,54 @@ func initializeApp(ctx context.Context, configService config.Configuration, newD
 	userService := services.NewUserService(userRepo, logger, tokenService, sessionRepo)
 	categoryService := categoryServices.NewCategoryService(categoryRepo, logger)
 
+	// Asynq Client & Worker
+	redisAddr := os.Getenv("REDIS_ADDR")
+	if redisAddr == "" {
+		redisAddr = configService.GetConfig().Psql.Host + ":6379" // Fallback mostly for local
+		// Better to rely on config
+	}
+	// override if in config map env var
+	if val := os.Getenv("REDIS_ADDR"); val != "" {
+		redisAddr = val
+	}
+
+	redisOpt := asynq.RedisClientOpt{Addr: redisAddr}
+	asynqClient := asynq.NewClient(redisOpt)
+	defer asynqClient.Close()
+
+	mediaRepo := media.NewPostgresMediaRepository(db.Conn)
+	mediaService, err := media.NewMediaService(mediaRepo, asynqClient, configService.GetConfig())
+	if err != nil {
+		logger.Logger.Error().Err(err).Msg("Failed to initialize media service")
+	}
+
+	// Start Asynq Worker Server
+	asynqServer := asynq.NewServer(
+		redisOpt,
+		asynq.Config{
+			Concurrency: 10,
+			Queues: map[string]int{
+				"critical": 6,
+				"default":  3,
+				"low":      1,
+			},
+		},
+	)
+
+	mux := asynq.NewServeMux()
+	processor, err := worker.NewProcessor(mediaRepo, configService.GetConfig(), logger)
+	if err != nil {
+		logger.Logger.Error().Err(err).Msg("Failed to initialize worker processor")
+	} else {
+		mux.HandleFunc(tasks.TypeProcessImage, processor.HandleProcessImageTask)
+	}
+
+	go func() {
+		if err := asynqServer.Run(mux); err != nil {
+			logger.Logger.Fatal().Err(err).Msg("could not run server")
+		}
+	}()
+
 	// Email verification repository
 	emailVerifRepo := authRepos.NewEmailVerificationRepoPsql(db, logger)
 	userService.SetEmailVerificationRepo(emailVerifRepo)
@@ -94,7 +146,7 @@ func initializeApp(ctx context.Context, configService config.Configuration, newD
 	server.Use(middleware.LoggerMiddleware(logger))
 
 	// routes
-	server = router.SetupRouter(server, logger, userService, tokenService, categoryService)
+	server = router.SetupRouter(server, logger, userService, tokenService, categoryService, mediaService)
 
 	return server, nil
 }

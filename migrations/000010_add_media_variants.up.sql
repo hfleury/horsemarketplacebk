@@ -1,0 +1,1 @@
+ALTER TABLE authentic.media ADD COLUMN IF NOT EXISTS variants JSONB;
