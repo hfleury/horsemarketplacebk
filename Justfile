@@ -9,7 +9,7 @@ docker-build:
     eval $(minikube docker-env) && docker build -t hfcardoso/golang-server:latest -f deploy/local/Dockerfile .
 
 # Apply kubernetes manifests
-k8s-apply:
+k8s-apply: k8s-apply-frontend
     kubectl apply -f deploy/local/go-namespace.yaml
     kubectl apply -f deploy/local/postgres-volume.yaml
     kubectl apply -f deploy/local/go-configmap.yaml
@@ -24,6 +24,8 @@ k8s-apply-psql:
     kubectl apply -f deploy/local/go-namespace.yaml
     # Ensure local SMTP (MailHog) and configmap are applied for local email testing
     kubectl apply -f deploy/local/mailhog.yaml
+    kubectl apply -f deploy/local/minio.yaml
+    kubectl apply -f deploy/local/redis.yaml
     kubectl apply -f deploy/local/go-configmap.yaml
     kubectl apply -f deploy/local/postgres-volume.yaml
     kubectl apply -f deploy/local/postgres-deployment.yaml
@@ -56,6 +58,12 @@ test:
     go test ./...
 
 
+update-frontend:
+    eval $(minikube docker-env) && docker build -t hfcardoso/frontend:latest -f ../horsemarketplace-fe/Dockerfile ../horsemarketplace-fe && kubectl rollout restart deployment frontend -n development
+
+k8s-apply-frontend:
+    kubectl apply -f ../horsemarketplace-fe/deploy/local/frontend.yaml
+
 # Update minikube deployment
 update-minikube: docker-build
     kubectl rollout restart deployment golang-server -n development
@@ -72,6 +80,12 @@ run-local:
     export PSQL_PASSWORD="@EUZ29tmw-yr2jnZY8M@" && \
     export PSQL_SSLMODE="disable" && \
     export PASETO_KEY="0d2734c1bd19f2f273201165ca321914" && \
+    export PASETO_KEY="0d2734c1bd19f2f273201165ca321914" && \
+    export AWS_ENDPOINT="http://localhost:9000" && \
+    export AWS_REGION="us-east-1" && \
+    export AWS_ACCESS_KEY_ID="minioadmin" && \
+    export AWS_SECRET_ACCESS_KEY="minioadmin" && \
+    export AWS_BUCKET_NAME="horsemarketplace" && \
     export ENVIRONMENT="development" && \
     go run cmd/main.go
 

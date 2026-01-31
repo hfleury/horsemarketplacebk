@@ -17,3 +17,12 @@ data:
   SMTP_USERNAME: ""
   SMTP_PASSWORD: ""
   MAIL_FROM: "no-reply@example.local"
+  # MinIO
+  AWS_ENDPOINT: "minio-service:9000"
+  AWS_PUBLIC_ENDPOINT: "http://localhost:9000"
+  AWS_REGION: "us-east-1"
+  AWS_ACCESS_KEY_ID: "minioadmin"
+  AWS_SECRET_ACCESS_KEY: "minioadmin"
+  AWS_BUCKET_NAME: "horsemarketplace"
+  # Redis
+  REDIS_ADDR: "redis-service:6379"

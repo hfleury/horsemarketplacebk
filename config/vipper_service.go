@@ -36,6 +36,14 @@ func (vs *VipperService) LoadConfiguration() {
 	vs.Config.SMTP.Password = viper.GetString("SMTP_PASSWORD")
 	vs.Config.SMTP.From = viper.GetString("MAIL_FROM")
 
+	// AWS / MinIO
+	vs.Config.AWS.Endpoint = viper.GetString("AWS_ENDPOINT")
+	vs.Config.AWS.PublicEndpoint = viper.GetString("AWS_PUBLIC_ENDPOINT")
+	vs.Config.AWS.Region = viper.GetString("AWS_REGION")
+	vs.Config.AWS.AccessKeyID = viper.GetString("AWS_ACCESS_KEY_ID")
+	vs.Config.AWS.SecretAccessKey = viper.GetString("AWS_SECRET_ACCESS_KEY")
+	vs.Config.AWS.BucketName = viper.GetString("AWS_BUCKET_NAME")
+
 	// Log loaded configuration for debugging
 	log.Printf("Loaded configuration: %+v", vs.Config)
 

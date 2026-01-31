@@ -14,6 +14,16 @@ type AllConfiguration struct {
 	PasetoKey string         `mapstructure:"paseto_key"`
 	Env       string         `mapstructure:"environment"`
 	SMTP      SMTPConfig     `mapstructure:"smtp"`
+	AWS       AWSConfig      `mapstructure:"aws"`
+}
+
+type AWSConfig struct {
+	Endpoint        string `mapstructure:"aws_endpoint"`
+	PublicEndpoint  string `mapstructure:"aws_public_endpoint"`
+	Region          string `mapstructure:"aws_region"`
+	AccessKeyID     string `mapstructure:"aws_access_key_id"`
+	SecretAccessKey string `mapstructure:"aws_secret_access_key"`
+	BucketName      string `mapstructure:"aws_bucket_name"`
 }
 
 type SMTPConfig struct {
