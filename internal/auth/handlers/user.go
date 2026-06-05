@@ -420,3 +420,85 @@ func (h *UserHandler) BlockUser(c *gin.Context) {
 	response.Message = "User status updated"
 	c.JSON(http.StatusOK, response)
 }
+
+func (h *UserHandler) ForgotPassword(c *gin.Context) {
+	logger := h.logger.GetLoggerFromContext(c)
+	response := common.APIResponse{}
+
+	var body struct {
+		Email *string `json:"email"`
+	}
+
+	if err := c.ShouldBindJSON(&body); err != nil {
+		requestBody, _ := c.Get("request_body")
+		logger.Log(c, config.ErrorLevel, "Failed to bind forgot password request", map[string]any{
+			"error":        err.Error(),
+			"request_body": requestBody,
+		})
+		response.Status = "error"
+		response.Message = "Invalid request body"
+		c.JSON(http.StatusBadRequest, response)
+		return
+	}
+
+	if body.Email == nil || strings.TrimSpace(*body.Email) == "" {
+		response.Status = "error"
+		response.Message = "Email is required"
+		c.JSON(http.StatusBadRequest, response)
+		return
+	}
+
+	// Request password reset. If the email address doesn't exist, this function returns nil to prevent username enumeration.
+	if err := h.userService.RequestPasswordReset(c.Request.Context(), *body.Email); err != nil {
+		logger.Log(c, config.ErrorLevel, "Failed to request password reset", map[string]any{"error": err.Error(), "email": *body.Email})
+		response.Status = "error"
+		response.Message = "Failed to request password reset"
+		c.JSON(http.StatusInternalServerError, response)
+		return
+	}
+
+	response.Status = "success"
+	response.Message = "If the email exists, a password reset link has been sent"
+	c.JSON(http.StatusOK, response)
+}
+
+func (h *UserHandler) ResetPassword(c *gin.Context) {
+	logger := h.logger.GetLoggerFromContext(c)
+	response := common.APIResponse{}
+
+	var body struct {
+		Token    *string `json:"token"`
+		Password *string `json:"password"`
+	}
+
+	if err := c.ShouldBindJSON(&body); err != nil {
+		requestBody, _ := c.Get("request_body")
+		logger.Log(c, config.ErrorLevel, "Failed to bind reset password request", map[string]any{
+			"error":        err.Error(),
+			"request_body": requestBody,
+		})
+		response.Status = "error"
+		response.Message = "Invalid request body"
+		c.JSON(http.StatusBadRequest, response)
+		return
+	}
+
+	if body.Token == nil || strings.TrimSpace(*body.Token) == "" || body.Password == nil || *body.Password == "" {
+		response.Status = "error"
+		response.Message = "Token and password are required"
+		c.JSON(http.StatusBadRequest, response)
+		return
+	}
+
+	if err := h.userService.ResetPassword(c.Request.Context(), *body.Token, *body.Password); err != nil {
+		logger.Log(c, config.ErrorLevel, "Failed to reset password", map[string]any{"error": err.Error()})
+		response.Status = "error"
+		response.Message = err.Error()
+		c.JSON(http.StatusBadRequest, response)
+		return
+	}
+
+	response.Status = "success"
+	response.Message = "Password has been reset successfully"
+	c.JSON(http.StatusOK, response)
+}

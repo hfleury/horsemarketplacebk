@@ -35,6 +35,21 @@ func (m *MockUserRepository) EXPECT() *MockUserRepositoryMockRecorder {
 	return m.recorder
 }
 
+// FindAll mocks base method.
+func (m *MockUserRepository) FindAll(ctx context.Context) ([]*models.User, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "FindAll", ctx)
+	ret0, _ := ret[0].([]*models.User)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// FindAll indicates an expected call of FindAll.
+func (mr *MockUserRepositoryMockRecorder) FindAll(ctx interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FindAll", reflect.TypeOf((*MockUserRepository)(nil).FindAll), ctx)
+}
+
 // Insert mocks base method.
 func (m *MockUserRepository) Insert(ctx context.Context, user *models.User) (*models.User, error) {
 	m.ctrl.T.Helper()
@@ -139,19 +154,18 @@ func (mr *MockUserRepositoryMockRecorder) SetVerified(ctx, id, verified interfac
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetVerified", reflect.TypeOf((*MockUserRepository)(nil).SetVerified), ctx, id, verified)
 }
 
-// FindAll mocks base method.
-func (m *MockUserRepository) FindAll(ctx context.Context) ([]*models.User, error) {
+// UpdatePassword mocks base method.
+func (m *MockUserRepository) UpdatePassword(ctx context.Context, id, hashedPassword string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "FindAll", ctx)
-	ret0, _ := ret[0].([]*models.User)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
+	ret := m.ctrl.Call(m, "UpdatePassword", ctx, id, hashedPassword)
+	ret0, _ := ret[0].(error)
+	return ret0
 }
 
-// FindAll indicates an expected call of FindAll.
-func (mr *MockUserRepositoryMockRecorder) FindAll(ctx interface{}) *gomock.Call {
+// UpdatePassword indicates an expected call of UpdatePassword.
+func (mr *MockUserRepositoryMockRecorder) UpdatePassword(ctx, id, hashedPassword interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FindAll", reflect.TypeOf((*MockUserRepository)(nil).FindAll), ctx)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdatePassword", reflect.TypeOf((*MockUserRepository)(nil).UpdatePassword), ctx, id, hashedPassword)
 }
 
 // UpdateStatus mocks base method.

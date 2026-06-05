@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"regexp"
 	"strings"
 	"time"
@@ -17,12 +18,14 @@ import (
 )
 
 type UserService struct {
-	userRepo       repositories.UserRepository
-	logger         config.Logging
-	tokenService   *TokenService
-	sessionRepo    repositories.SessionRepository
-	emailSender    email.Sender
-	emailVerifRepo repositories.EmailVerificationRepository
+	userRepo          repositories.UserRepository
+	logger            config.Logging
+	tokenService      *TokenService
+	sessionRepo       repositories.SessionRepository
+	emailSender       email.Sender
+	emailVerifRepo    repositories.EmailVerificationRepository
+	passwordResetRepo repositories.PasswordResetRepository
+	frontendURL       string
 }
 
 func NewUserService(userRepo repositories.UserRepository, logger config.Logging, tokenService *TokenService, sessionRepo repositories.SessionRepository) *UserService {
@@ -43,6 +46,16 @@ func (us *UserService) SetEmailSender(s email.Sender) {
 // SetEmailVerificationRepo wires the EmailVerification repository.
 func (us *UserService) SetEmailVerificationRepo(r repositories.EmailVerificationRepository) {
 	us.emailVerifRepo = r
+}
+
+// SetPasswordResetRepo wires the PasswordReset repository.
+func (us *UserService) SetPasswordResetRepo(r repositories.PasswordResetRepository) {
+	us.passwordResetRepo = r
+}
+
+// SetFrontendURL sets the frontend application base URL.
+func (us *UserService) SetFrontendURL(url string) {
+	us.frontendURL = url
 }
 
 func (us *UserService) CreateUser(ctx context.Context, userRequest models.UserCreateResquest) (*models.User, error) {
@@ -238,9 +251,9 @@ func (us *UserService) hashPassword(ctx context.Context, password string) (strin
 }
 
 func (us *UserService) Login(ctx context.Context, userLogin models.UserLogin) (*models.LoginResponse, error) {
-	if userLogin.Username == nil || userLogin.PasswordHash == nil {
-		us.logger.Log(ctx, config.InfoLevel, "Username or password missing", map[string]any{
-			"Message": "Username or password missing",
+	if userLogin.Username == nil || userLogin.PasswordHash == nil || strings.TrimSpace(*userLogin.Username) == "" || *userLogin.PasswordHash == "" {
+		us.logger.Log(ctx, config.InfoLevel, "Username or password missing or empty", map[string]any{
+			"Message": "Username or password missing or empty",
 		})
 		return nil, errors.New("username and password must be provided")
 	}
@@ -512,4 +525,129 @@ func (us *UserService) GetAllUsers(ctx context.Context) ([]*models.User, error) 
 
 func (us *UserService) UpdateUserStatus(ctx context.Context, id string, isActive bool) error {
 	return us.userRepo.UpdateStatus(ctx, id, isActive)
+}
+
+func (us *UserService) RequestPasswordReset(ctx context.Context, emailAddress string) error {
+	emailAddress = strings.ToLower(strings.TrimSpace(emailAddress))
+
+	if us.emailSender == nil || us.passwordResetRepo == nil {
+		us.logger.Log(ctx, config.ErrorLevel, "email sender or password reset repository not configured", nil)
+		return errors.New("system configuration error")
+	}
+
+	// 1. Look up user by email
+	user, err := us.userRepo.SelectUserByEmail(ctx, &models.User{Email: &emailAddress})
+	if err != nil || user == nil {
+		// Generic success message to prevent user enumeration
+		us.logger.Log(ctx, config.InfoLevel, "password reset requested for unknown email", map[string]any{"email": emailAddress})
+		return nil
+	}
+
+	// 2. Generate secure token
+	token := uuid.New().String()
+	now := time.Now().UTC()
+	expiry := now.Add(1 * time.Hour) // Token expires in 1 hour
+
+	pr := &models.PasswordReset{
+		UserId:      user.Id,
+		ResetToken:  &token,
+		RequestedAt: &now,
+		ExpiresAt:   &expiry,
+		IsUsed:      func(b bool) *bool { return &b }(false),
+	}
+
+	// 3. Save reset record to DB
+	_, err = us.passwordResetRepo.Create(ctx, pr)
+	if err != nil {
+		us.logger.Log(ctx, config.ErrorLevel, "failed to persist password reset record", map[string]any{"error": err.Error(), "user_id": user.Id})
+		return err
+	}
+
+	// 4. Send email
+	frontendURL := os.Getenv("FRONTEND_URL")
+	if frontendURL == "" {
+		frontendURL = us.frontendURL
+	}
+	if frontendURL == "" {
+		frontendURL = "http://localhost:5173"
+	}
+	// remove trailing slash if present to make URL construction clean
+	frontendURL = strings.TrimSuffix(frontendURL, "/")
+
+	resetLink := fmt.Sprintf("%s/reset-password?token=%s", frontendURL, token)
+	body := fmt.Sprintf("Hello %s,\n\nYou have requested to reset your password. Please click the link below to set a new password:\n%s\n\nThis link will expire in 1 hour. If you did not request this, you can ignore this email.", func() string {
+		if user.Username != nil {
+			return *user.Username
+		}
+		return "User"
+	}(), resetLink)
+
+	us.logger.Log(ctx, config.InfoLevel, "sending password reset email", map[string]any{
+		"email":      emailAddress,
+		"reset_link": resetLink,
+	})
+
+	if err := us.emailSender.Send(ctx, emailAddress, "Reset your HorseMarketplace password", body); err != nil {
+		us.logger.Log(ctx, config.ErrorLevel, "failed to send password reset email", map[string]any{"error": err.Error()})
+		return err
+	}
+
+	return nil
+}
+
+func (us *UserService) ResetPassword(ctx context.Context, token string, newPassword string) error {
+	if us.passwordResetRepo == nil {
+		return errors.New("password reset repository not configured")
+	}
+
+	// 1. Fetch the token
+	pr, err := us.passwordResetRepo.SelectByToken(ctx, token)
+	if err != nil || pr == nil {
+		us.logger.Log(ctx, config.InfoLevel, "invalid password reset token used", map[string]any{"token": token})
+		return errors.New("invalid or expired token")
+	}
+
+	// 2. Validate expiration and whether it has been used
+	if pr.IsUsed != nil && *pr.IsUsed {
+		us.logger.Log(ctx, config.InfoLevel, "password reset token already used", map[string]any{"token": token})
+		return errors.New("invalid or expired token")
+	}
+
+	if pr.ExpiresAt != nil && pr.ExpiresAt.Before(time.Now().UTC()) {
+		us.logger.Log(ctx, config.InfoLevel, "password reset token expired", map[string]any{"token": token})
+		return errors.New("invalid or expired token")
+	}
+
+	// 3. Validate new password strength constraints
+	if err := us.validatePassword(newPassword); err != nil {
+		us.logger.Log(ctx, config.InfoLevel, "new password failed strength validation", map[string]any{"error": err.Error()})
+		return err
+	}
+
+	// 4. Hash new password
+	hashedPassword, err := us.hashPassword(ctx, newPassword)
+	if err != nil {
+		us.logger.Log(ctx, config.ErrorLevel, "failed to hash new password", map[string]any{"error": err.Error()})
+		return err
+	}
+
+	// 5. Update user password hash in DB
+	if pr.UserId == nil {
+		return errors.New("invalid user association on reset token")
+	}
+
+	err = us.userRepo.UpdatePassword(ctx, pr.UserId.String(), hashedPassword)
+	if err != nil {
+		us.logger.Log(ctx, config.ErrorLevel, "failed to update user password", map[string]any{"error": err.Error(), "user_id": pr.UserId})
+		return err
+	}
+
+	// 6. Mark token as used
+	err = us.passwordResetRepo.MarkAsUsed(ctx, token)
+	if err != nil {
+		// Log the error but don't fail the request since the password was already updated
+		us.logger.Log(ctx, config.ErrorLevel, "failed to mark password reset token as used", map[string]any{"error": err.Error(), "token": token})
+	}
+
+	return nil
 }

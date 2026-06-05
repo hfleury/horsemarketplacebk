@@ -21,6 +21,8 @@ func registerUserRoutes(router *gin.Engine, logger config.Logging, userService *
 			authRoutes.POST("/login", userHandler.Login)
 			authRoutes.POST("/refresh", userHandler.Refresh)
 			authRoutes.GET("/verify", userHandler.Verify) // Added verify endpoint mapping if it was missing or just explicit
+			authRoutes.POST("/forgot-password", userHandler.ForgotPassword)
+			authRoutes.POST("/reset-password", userHandler.ResetPassword)
 
 			// Protected routes
 			protected := authRoutes.Group("/")

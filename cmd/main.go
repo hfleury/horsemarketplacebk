@@ -2,8 +2,12 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/gin-contrib/cors"
@@ -36,64 +40,122 @@ type Server interface {
 	Run(addr ...string) error
 }
 
+// CombinedRuntime manages the lifetime of all long-running processes
+type CombinedRuntime struct {
+	ginEngine   *gin.Engine
+	asynqServer *asynq.Server
+	asynqClient *asynq.Client
+	dbPool      *db.PsqlDB
+	logger      *config.ZerologService
+}
+
+// Run overrides standard blocking logic to safely orchestrate a clean shutdown
+func (cr *CombinedRuntime) Run(addr ...string) error {
+	address := ":8080"
+	if len(addr) > 0 && addr[0] != "" {
+		address = addr[0]
+	}
+
+	srv := &http.Server{
+		Addr:    address,
+		Handler: cr.ginEngine,
+	}
+
+	// Channel to capture termination signals from the OS
+	stopChan := make(chan os.Signal, 1)
+	signal.Notify(stopChan, os.Interrupt, syscall.SIGTERM)
+
+	// Start HTTP Server in the background
+	go func() {
+		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			cr.logger.Logger.Fatal().Err(err).Msg("HTTP server crashed")
+		}
+	}()
+	cr.logger.Logger.Info().Msgf("HTTP Server actively listening on %s", address)
+
+	// Block here until Ctrl+C or a SIGTERM is intercepted
+	sig := <-stopChan
+	cr.logger.Logger.Info().Msgf("Signal %v caught. Graceful shutdown sequence initialized...", sig)
+
+	// Enforce a strict 10-second completion timeout window
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	// 1. Terminate incoming HTTP traffic
+	if err := srv.Shutdown(shutdownCtx); err != nil {
+		cr.logger.Logger.Error().Err(err).Msg("HTTP server forced to terminate")
+	} else {
+		cr.logger.Logger.Info().Msg("HTTP server stopped gracefully")
+	}
+
+	// 2. Shut down background workers safely
+	cr.asynqServer.Shutdown()
+	cr.logger.Logger.Info().Msg("Asynq worker cluster stopped gracefully")
+
+	// 3. Sever connection clients cleanly
+	cr.asynqClient.Close()
+	cr.logger.Logger.Info().Msg("Asynq client connection pool closed")
+
+	cr.logger.Logger.Info().Msg("All application layers torn down successfully. Exiting.")
+	return nil
+}
+
 func initializeApp(ctx context.Context, configService config.Configuration, newDB dbFactory) (Server, error) {
 	// Configuration
 	configService.LoadConfiguration()
+	cfg := configService.GetConfig()
 
 	// Logging
 	logger := config.NewZerologService()
 	logger.Logger.Debug().Msg("Logger initialized")
 
 	// DB PSQL
-	db, err := newDB(configService.GetConfig(), *logger.Logger)
+	database, err := newDB(cfg, *logger.Logger)
 	if err != nil {
-		logger.Logger.Error().Err(err).Msg("Error initialize the Postgres DB")
+		logger.Logger.Error().Err(err).Msg("Error initializing the Postgres DB")
 		return nil, err
 	}
 
 	// Add the traceID to the logger
 	ctx = logger.WithTrace(ctx, uuid.New().String())
-
 	logger.Log(ctx, config.InfoLevel, "Application started and logging initialized", nil)
 
 	// Repositories
-	userRepo := authRepos.NewUserRepoPsql(db, logger)
-	sessionRepo := authRepos.NewSessionRepoPsql(db, logger)
-	categoryRepo := categoryRepos.NewCategoryRepoPsql(db, logger)
-	systemSettingsRepo := system.NewSettingsRepoPsql(db, logger)
-	productRepo := productRepos.NewProductRepoPsql(db, logger)
+	userRepo := authRepos.NewUserRepoPsql(database, logger)
+	sessionRepo := authRepos.NewSessionRepoPsql(database, logger)
+	passwordResetRepo := authRepos.NewPasswordResetRepoPsql(database, logger)
+	categoryRepo := categoryRepos.NewCategoryRepoPsql(database, logger)
+	systemSettingsRepo := system.NewSettingsRepoPsql(database, logger)
+	productRepo := productRepos.NewProductRepoPsql(database, logger)
 
 	// Services
-	tokenService := services.NewTokenService(configService.GetConfig(), logger)
+	tokenService := services.NewTokenService(cfg, logger)
 	userService := services.NewUserService(userRepo, logger, tokenService, sessionRepo)
+	userService.SetPasswordResetRepo(passwordResetRepo)
+	userService.SetFrontendURL(cfg.FrontendURL)
 	categoryService := categoryServices.NewCategoryService(categoryRepo, logger)
 	productService := productServices.NewProductService(productRepo, systemSettingsRepo, logger)
 
 	// Handlers
 	productHandler := productHandlers.NewProductHandler(productService, logger)
 
-	// Asynq Client & Worker
+	// Asynq Configuration
 	redisAddr := os.Getenv("REDIS_ADDR")
 	if redisAddr == "" {
-		redisAddr = configService.GetConfig().Psql.Host + ":6379" // Fallback mostly for local
-		// Better to rely on config
-	}
-	// override if in config map env var
-	if val := os.Getenv("REDIS_ADDR"); val != "" {
-		redisAddr = val
+		redisAddr = cfg.Psql.Host + ":6379"
 	}
 
 	redisOpt := asynq.RedisClientOpt{Addr: redisAddr}
 	asynqClient := asynq.NewClient(redisOpt)
-	defer asynqClient.Close()
+	// Notice: Removed 'defer asynqClient.Close()' to maintain its lifespan for mediaService
 
-	mediaRepo := media.NewPostgresMediaRepository(db.Conn)
-	mediaService, err := media.NewMediaService(mediaRepo, asynqClient, configService.GetConfig())
+	mediaRepo := media.NewPostgresMediaRepository(database.Conn)
+	mediaService, err := media.NewMediaService(mediaRepo, asynqClient, cfg)
 	if err != nil {
 		logger.Logger.Error().Err(err).Msg("Failed to initialize media service")
 	}
 
-	// Start Asynq Worker Server
+	// Config Asynq Server
 	asynqServer := asynq.NewServer(
 		redisOpt,
 		asynq.Config{
@@ -107,58 +169,64 @@ func initializeApp(ctx context.Context, configService config.Configuration, newD
 	)
 
 	mux := asynq.NewServeMux()
-	processor, err := worker.NewProcessor(mediaRepo, configService.GetConfig(), logger)
+	processor, err := worker.NewProcessor(mediaRepo, cfg, logger)
 	if err != nil {
 		logger.Logger.Error().Err(err).Msg("Failed to initialize worker processor")
 	} else {
 		mux.HandleFunc(tasks.TypeProcessImage, processor.HandleProcessImageTask)
 	}
 
-	go func() {
-		if err := asynqServer.Run(mux); err != nil {
-			logger.Logger.Fatal().Err(err).Msg("could not run server")
-		}
-	}()
+	// Use non-blocking Start instead of Run to hand thread control to our execution manager
+	if err := asynqServer.Start(mux); err != nil {
+		logger.Logger.Error().Err(err).Msg("Could not start Asynq worker server")
+		return nil, err
+	}
 
-	// Email verification repository
-	emailVerifRepo := authRepos.NewEmailVerificationRepoPsql(db, logger)
+	// Email verification setup
+	emailVerifRepo := authRepos.NewEmailVerificationRepoPsql(database, logger)
 	userService.SetEmailVerificationRepo(emailVerifRepo)
-	// Email sender selection (in order): SMTP config, Mailgun env, Mock (dev)
-	cfg := configService.GetConfig()
+
 	var sender email.Sender
 	if cfg.SMTP.Host != "" && cfg.SMTP.Port != "" && cfg.SMTP.From != "" {
-		// parse port
 		port := 25
 		fmt.Sscanf(cfg.SMTP.Port, "%d", &port)
 		sender = email.NewSMTPSender(cfg.SMTP.Host, port, cfg.SMTP.Username, cfg.SMTP.Password, cfg.SMTP.From)
 	} else {
-		// fallback to Mailgun if configured via env (keeps previous behavior)
 		mailgunDomain := os.Getenv("MAILGUN_DOMAIN")
 		mailgunAPIKey := os.Getenv("MAILGUN_API_KEY")
 		mailFrom := os.Getenv("MAIL_FROM")
 		if mailgunDomain != "" && mailgunAPIKey != "" && mailFrom != "" {
 			sender = email.NewMailgunSender(mailgunDomain, mailgunAPIKey, mailFrom, 10*time.Second)
 		} else {
-			// use centralized mock sender
 			sender = mockemail.NewMockSender()
 		}
 	}
 	userService.SetEmailSender(sender)
 
-	// Create the Gin router and add middleware
-	server := gin.New()
-	server.Use(cors.New(cors.Config{
-		AllowOrigins:     []string{"http://localhost:5173"},
+	// Engine Routing Allocation
+	serverEngine := gin.New()
+	serverEngine.Use(cors.New(cors.Config{
+		AllowOrigins: []string{
+			"http://localhost:5173",
+			"http://192.168.49.2:30080",
+		},
 		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
 		AllowHeaders:     []string{"Content-Type", "Authorization"},
 		AllowCredentials: true,
+		MaxAge:           12 * time.Hour,
 	}))
-	server.Use(middleware.LoggerMiddleware(logger))
+	serverEngine.Use(middleware.LoggerMiddleware(logger))
 
-	// routes
-	server = router.SetupRouter(server, logger, userService, tokenService, categoryService, mediaService, productService, productHandler)
+	serverEngine = router.SetupRouter(serverEngine, logger, userService, tokenService, categoryService, mediaService, productService, productHandler)
 
-	return server, nil
+	// Wrap dependencies inside our custom interface coordinator
+	return &CombinedRuntime{
+		ginEngine:   serverEngine,
+		asynqServer: asynqServer,
+		asynqClient: asynqClient,
+		dbPool:      database,
+		logger:      logger,
+	}, nil
 }
 
 type Launcher struct {
@@ -171,6 +239,7 @@ func (l *Launcher) Run(ctx context.Context, configService config.Configuration, 
 		return err
 	}
 
+	// This invokes the CombinedRuntime.Run blocking sequence containing our signal listeners
 	if err := server.Run(":8080"); err != nil {
 		return err
 	}
@@ -188,6 +257,6 @@ func main() {
 
 	if err := launcher.Run(ctx, configService, db.NewPsqlDB); err != nil {
 		fmt.Print(err)
-		panic("Application failed")
+		panic("Application failed to run safely")
 	}
 }

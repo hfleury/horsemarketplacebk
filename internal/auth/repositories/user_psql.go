@@ -262,3 +262,16 @@ func (ur *UserRepoPsql) UpdateStatus(ctx context.Context, id string, isActive bo
 	}
 	return err
 }
+
+// UpdatePassword updates the user's password hash in the database
+func (ur *UserRepoPsql) UpdatePassword(ctx context.Context, id string, hashedPassword string) error {
+	query := `UPDATE authentic.users SET password_hash = $2, updated_at = NOW() WHERE id = $1`
+	_, err := ur.psql.Execute(ctx, query, id, hashedPassword)
+	if err != nil {
+		ur.logger.Log(ctx, config.ErrorLevel, "Failed to update user password", map[string]any{
+			"error": err.Error(),
+			"id":    id,
+		})
+	}
+	return err
+}

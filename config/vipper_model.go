@@ -10,11 +10,12 @@ type PostgresConfig struct {
 }
 
 type AllConfiguration struct {
-	Psql      PostgresConfig `mapstructure:"psql"`
-	PasetoKey string         `mapstructure:"paseto_key"`
-	Env       string         `mapstructure:"environment"`
-	SMTP      SMTPConfig     `mapstructure:"smtp"`
-	AWS       AWSConfig      `mapstructure:"aws"`
+	Psql        PostgresConfig `mapstructure:"psql"`
+	PasetoKey   string         `mapstructure:"paseto_key"`
+	Env         string         `mapstructure:"environment"`
+	SMTP        SMTPConfig     `mapstructure:"smtp"`
+	AWS         AWSConfig      `mapstructure:"aws"`
+	FrontendURL string         `mapstructure:"frontend_url"`
 }
 
 type AWSConfig struct {

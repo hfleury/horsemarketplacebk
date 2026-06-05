@@ -20,4 +20,6 @@ type UserRepository interface {
 	FindAll(ctx context.Context) ([]*models.User, error)
 	// UpdateStatus updates the user's active status
 	UpdateStatus(ctx context.Context, id string, isActive bool) error
+	// UpdatePassword updates the user's password hash
+	UpdatePassword(ctx context.Context, id string, hashedPassword string) error
 }

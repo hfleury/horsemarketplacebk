@@ -1,4 +1,5 @@
 # set shell := ["bash", "-c"]
+export APP_ENV := "local"
 
 # Start minikube
 minikube-start:
@@ -72,21 +73,6 @@ update-minikube: docker-build
 run-local:
     @echo "Starting application locally..."
     @echo "Make sure PostgreSQL is running in minikube (just k8s-apply)"
-    @echo "Connecting to PostgreSQL at $(minikube ip):30007"
-    export PSQL_HOST=$(minikube ip) && \
-    export PSQL_DB_NAME="horsemktdb" && \
-    export PSQL_USERNAME="horsemktuser" && \
-    export PSQL_PORT="30007" && \
-    export PSQL_PASSWORD="@EUZ29tmw-yr2jnZY8M@" && \
-    export PSQL_SSLMODE="disable" && \
-    export PASETO_KEY="0d2734c1bd19f2f273201165ca321914" && \
-    export PASETO_KEY="0d2734c1bd19f2f273201165ca321914" && \
-    export AWS_ENDPOINT="http://localhost:9000" && \
-    export AWS_REGION="us-east-1" && \
-    export AWS_ACCESS_KEY_ID="minioadmin" && \
-    export AWS_SECRET_ACCESS_KEY="minioadmin" && \
-    export AWS_BUCKET_NAME="horsemarketplace" && \
-    export ENVIRONMENT="development" && \
     go run cmd/main.go
 
 # Port forward PostgreSQL for local development (alternative to NodePort)

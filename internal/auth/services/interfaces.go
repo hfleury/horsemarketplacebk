@@ -17,4 +17,6 @@ type UserServiceInterface interface {
 	ResendVerification(ctx context.Context, email string) error
 	GetAllUsers(ctx context.Context) ([]*models.User, error)
 	UpdateUserStatus(ctx context.Context, id string, isActive bool) error
+	RequestPasswordReset(ctx context.Context, email string) error
+	ResetPassword(ctx context.Context, token string, newPassword string) error
 }

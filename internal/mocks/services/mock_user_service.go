@@ -50,6 +50,21 @@ func (mr *MockUserServiceInterfaceMockRecorder) CreateUser(ctx, userRequest inte
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateUser", reflect.TypeOf((*MockUserServiceInterface)(nil).CreateUser), ctx, userRequest)
 }
 
+// GetAllUsers mocks base method.
+func (m *MockUserServiceInterface) GetAllUsers(ctx context.Context) ([]*models.User, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetAllUsers", ctx)
+	ret0, _ := ret[0].([]*models.User)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetAllUsers indicates an expected call of GetAllUsers.
+func (mr *MockUserServiceInterfaceMockRecorder) GetAllUsers(ctx interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAllUsers", reflect.TypeOf((*MockUserServiceInterface)(nil).GetAllUsers), ctx)
+}
+
 // Login mocks base method.
 func (m *MockUserServiceInterface) Login(ctx context.Context, userLogin models.UserLogin) (*models.LoginResponse, error) {
 	m.ctrl.T.Helper()
@@ -96,6 +111,20 @@ func (mr *MockUserServiceInterfaceMockRecorder) Refresh(ctx, refreshToken interf
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Refresh", reflect.TypeOf((*MockUserServiceInterface)(nil).Refresh), ctx, refreshToken)
 }
 
+// RequestPasswordReset mocks base method.
+func (m *MockUserServiceInterface) RequestPasswordReset(ctx context.Context, email string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "RequestPasswordReset", ctx, email)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// RequestPasswordReset indicates an expected call of RequestPasswordReset.
+func (mr *MockUserServiceInterfaceMockRecorder) RequestPasswordReset(ctx, email interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RequestPasswordReset", reflect.TypeOf((*MockUserServiceInterface)(nil).RequestPasswordReset), ctx, email)
+}
+
 // ResendVerification mocks base method.
 func (m *MockUserServiceInterface) ResendVerification(ctx context.Context, email string) error {
 	m.ctrl.T.Helper()
@@ -108,6 +137,20 @@ func (m *MockUserServiceInterface) ResendVerification(ctx context.Context, email
 func (mr *MockUserServiceInterfaceMockRecorder) ResendVerification(ctx, email interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ResendVerification", reflect.TypeOf((*MockUserServiceInterface)(nil).ResendVerification), ctx, email)
+}
+
+// ResetPassword mocks base method.
+func (m *MockUserServiceInterface) ResetPassword(ctx context.Context, token, newPassword string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ResetPassword", ctx, token, newPassword)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// ResetPassword indicates an expected call of ResetPassword.
+func (mr *MockUserServiceInterfaceMockRecorder) ResetPassword(ctx, token, newPassword interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ResetPassword", reflect.TypeOf((*MockUserServiceInterface)(nil).ResetPassword), ctx, token, newPassword)
 }
 
 // SelectUserByUsername mocks base method.
@@ -125,35 +168,6 @@ func (mr *MockUserServiceInterfaceMockRecorder) SelectUserByUsername(ctx, user i
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SelectUserByUsername", reflect.TypeOf((*MockUserServiceInterface)(nil).SelectUserByUsername), ctx, user)
 }
 
-// VerifyEmail mocks base method.
-func (m *MockUserServiceInterface) VerifyEmail(ctx context.Context, token string) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "VerifyEmail", ctx, token)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// VerifyEmail indicates an expected call of VerifyEmail.
-func (mr *MockUserServiceInterfaceMockRecorder) VerifyEmail(ctx, token interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "VerifyEmail", reflect.TypeOf((*MockUserServiceInterface)(nil).VerifyEmail), ctx, token)
-}
-
-// GetAllUsers mocks base method.
-func (m *MockUserServiceInterface) GetAllUsers(ctx context.Context) ([]*models.User, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetAllUsers", ctx)
-	ret0, _ := ret[0].([]*models.User)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// GetAllUsers indicates an expected call of GetAllUsers.
-func (mr *MockUserServiceInterfaceMockRecorder) GetAllUsers(ctx interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAllUsers", reflect.TypeOf((*MockUserServiceInterface)(nil).GetAllUsers), ctx)
-}
-
 // UpdateUserStatus mocks base method.
 func (m *MockUserServiceInterface) UpdateUserStatus(ctx context.Context, id string, isActive bool) error {
 	m.ctrl.T.Helper()
@@ -166,4 +180,18 @@ func (m *MockUserServiceInterface) UpdateUserStatus(ctx context.Context, id stri
 func (mr *MockUserServiceInterfaceMockRecorder) UpdateUserStatus(ctx, id, isActive interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateUserStatus", reflect.TypeOf((*MockUserServiceInterface)(nil).UpdateUserStatus), ctx, id, isActive)
+}
+
+// VerifyEmail mocks base method.
+func (m *MockUserServiceInterface) VerifyEmail(ctx context.Context, token string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "VerifyEmail", ctx, token)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// VerifyEmail indicates an expected call of VerifyEmail.
+func (mr *MockUserServiceInterfaceMockRecorder) VerifyEmail(ctx, token interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "VerifyEmail", reflect.TypeOf((*MockUserServiceInterface)(nil).VerifyEmail), ctx, token)
 }

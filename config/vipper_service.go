@@ -2,23 +2,45 @@ package config
 
 import (
 	"log"
+	"os"
+	"strings"
 
 	"github.com/spf13/viper"
 )
 
 type VipperService struct {
 	Config *AllConfiguration
+	AppEnv string
 }
 
 func NewVipperService() *VipperService {
 	viper.AutomaticEnv()
-	viper.SetDefault("environment", "development")
+	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
+	appEnv := os.Getenv("APP_ENV")
+	if appEnv == "" {
+		appEnv = "local"
+	}
+
 	return &VipperService{
 		Config: &AllConfiguration{},
+		AppEnv: appEnv,
 	}
 }
 
 func (vs *VipperService) LoadConfiguration() {
+	if vs.AppEnv == "local" {
+		log.Println("APP_ENV=local: Reading the configuration from the .env file")
+		viper.SetConfigFile(".env")
+		viper.SetConfigType("env")
+
+		if err := viper.ReadInConfig(); err != nil {
+			log.Println("Failed to load .env file", err)
+		} else {
+			log.Printf("✅ Successfully loaded values from file: %s", viper.ConfigFileUsed())
+		}
+	} else {
+		log.Printf("🐳 APP_ENV=%s: Bypassing file layer. Parsing live system/container environment parameters directly.", vs.AppEnv)
+	}
 	// Load each environment variable manually with uppercase names
 	vs.Config.Psql.Host = viper.GetString("PSQL_HOST")
 	vs.Config.Psql.DdName = viper.GetString("PSQL_DB_NAME")
@@ -28,6 +50,7 @@ func (vs *VipperService) LoadConfiguration() {
 	vs.Config.Psql.SSLMode = viper.GetString("PSQL_SSLMODE")
 	vs.Config.PasetoKey = viper.GetString("PASETO_KEY")
 	vs.Config.Env = viper.GetString("ENVIRONMENT")
+	vs.Config.FrontendURL = viper.GetString("FRONTEND_URL")
 
 	// SMTP / mail settings (optional)
 	vs.Config.SMTP.Host = viper.GetString("SMTP_HOST")
