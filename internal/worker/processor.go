@@ -6,7 +6,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"image"
+	_ "image/gif"
 	"image/jpeg"
+	_ "image/png"
 	"path/filepath"
 	"strings"
 
