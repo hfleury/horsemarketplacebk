@@ -30,11 +30,11 @@ type Processor struct {
 }
 
 func NewProcessor(repo media.MediaRepository, cfg *config.AllConfiguration, logger config.Logging) (*Processor, error) {
-	endpoint := strings.ReplaceAll(cfg.AWS.Endpoint, "http://", "")
+	endpoint := strings.ReplaceAll(cfg.Storage.Endpoint, "http://", "")
 	endpoint = strings.ReplaceAll(endpoint, "https://", "")
 
 	minioClient, err := minio.New(endpoint, &minio.Options{
-		Creds:  credentials.NewStaticV4(cfg.AWS.AccessKeyID, cfg.AWS.SecretAccessKey, ""),
+		Creds:  credentials.NewStaticV4(cfg.Storage.AccessKeyID, cfg.Storage.SecretAccessKey, ""),
 		Secure: false,
 	})
 	if err != nil {
@@ -55,7 +55,7 @@ func (p *Processor) HandleProcessImageTask(ctx context.Context, t *asynq.Task) e
 		return fmt.Errorf("json.Unmarshal failed: %v: %w", err, asynq.SkipRetry)
 	}
 
-	p.logger.Log(nil, config.InfoLevel, "Processing image task", map[string]any{"media_id": payload.MediaID})
+	p.logger.Log(ctx, config.InfoLevel, "Processing image task", map[string]any{"media_id": payload.MediaID})
 
 	mediaID, err := uuid.Parse(payload.MediaID)
 	if err != nil {
@@ -107,7 +107,7 @@ func (p *Processor) HandleProcessImageTask(ctx context.Context, t *asynq.Task) e
 		return fmt.Errorf("update variants: %w", err)
 	}
 
-	p.logger.Log(nil, config.InfoLevel, "Image processing completed", map[string]any{"media_id": payload.MediaID})
+	p.logger.Log(ctx, config.InfoLevel, "Image processing completed", map[string]any{"media_id": payload.MediaID})
 	return nil
 }
 
@@ -122,7 +122,7 @@ func (p *Processor) uploadVariant(ctx context.Context, img image.Image, original
 	newName := fmt.Sprintf("%s-%s.jpg", nameWithoutExt, suffix)
 
 	// Upload
-	_, err := p.minioClient.PutObject(ctx, p.config.AWS.BucketName, newName, buf, int64(buf.Len()), minio.PutObjectOptions{
+	_, err := p.minioClient.PutObject(ctx, p.config.Storage.BucketName, newName, buf, int64(buf.Len()), minio.PutObjectOptions{
 		ContentType: "image/jpeg",
 	})
 	if err != nil {
@@ -130,13 +130,13 @@ func (p *Processor) uploadVariant(ctx context.Context, img image.Image, original
 	}
 
 	// Generate Public URL
-	publicEndpoint := p.config.AWS.PublicEndpoint
+	publicEndpoint := p.config.Storage.PublicEndpoint
 	if publicEndpoint == "" {
-		publicEndpoint = p.config.AWS.Endpoint
+		publicEndpoint = p.config.Storage.Endpoint
 	}
 	if !strings.HasPrefix(publicEndpoint, "http") {
 		publicEndpoint = "http://" + publicEndpoint
 	}
 
-	return fmt.Sprintf("%s/%s/%s", publicEndpoint, p.config.AWS.BucketName, newName), nil
+	return fmt.Sprintf("%s/%s/%s", publicEndpoint, p.config.Storage.BucketName, newName), nil
 }

@@ -26,11 +26,11 @@ type MediaService struct {
 func NewMediaService(repo MediaRepository, queue *asynq.Client, cfg *config.AllConfiguration) (*MediaService, error) {
 	// Initialize MinIO client object
 	// Ensure endpoint doesn't have http schema for MinIO client New
-	endpoint := strings.ReplaceAll(cfg.AWS.Endpoint, "http://", "")
+	endpoint := strings.ReplaceAll(cfg.Storage.Endpoint, "http://", "")
 	endpoint = strings.ReplaceAll(endpoint, "https://", "")
 
 	minioClient, err := minio.New(endpoint, &minio.Options{
-		Creds:  credentials.NewStaticV4(cfg.AWS.AccessKeyID, cfg.AWS.SecretAccessKey, ""),
+		Creds:  credentials.NewStaticV4(cfg.Storage.AccessKeyID, cfg.Storage.SecretAccessKey, ""),
 		Secure: false, // Set to true for HTTPS
 	})
 	if err != nil {
@@ -42,7 +42,7 @@ func NewMediaService(repo MediaRepository, queue *asynq.Client, cfg *config.AllC
 		minioClient: minioClient,
 		queue:       queue,
 		config:      cfg,
-		bucketName:  cfg.AWS.BucketName,
+		bucketName:  cfg.Storage.BucketName,
 	}, nil
 }
 
@@ -69,9 +69,9 @@ func (s *MediaService) UploadFile(ctx context.Context, file multipart.File, head
 	// For local development, minio is at port 9000, but from browser it might be different.
 	// Let's use the configurated endpoint.
 	// Generate Public URL
-	publicEndpoint := s.config.AWS.PublicEndpoint
+	publicEndpoint := s.config.Storage.PublicEndpoint
 	if publicEndpoint == "" {
-		publicEndpoint = s.config.AWS.Endpoint
+		publicEndpoint = s.config.Storage.Endpoint
 	}
 	// Ensure scheme if missing (basic check)
 	if !strings.HasPrefix(publicEndpoint, "http") {
@@ -87,7 +87,7 @@ func (s *MediaService) UploadFile(ctx context.Context, file multipart.File, head
 		SizeBytes:    info.Size,
 		URL:          url,
 		BucketName:   s.bucketName,
-		Region:       s.config.AWS.Region,
+		Region:       s.config.Storage.Region,
 	}
 
 	createdMedia, err := s.repo.Create(ctx, media)
