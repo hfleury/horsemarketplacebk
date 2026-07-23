@@ -22,7 +22,8 @@ func SetupRouter(router *gin.Engine, logger config.Logging, userService *service
 }
 
 func registerProductRoutes(router *gin.Engine, logger config.Logging, handler *productHandlers.ProductHandler, tokenService *services.TokenService) {
-	products := router.Group("/products")
+	v1 := router.Group("/api/v1")
+	products := v1.Group("/products")
 	{
 		// Public
 		products.GET("", handler.List)

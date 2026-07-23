@@ -81,12 +81,13 @@ run-local:
     export PSQL_SSLMODE="disable" && \
     export PASETO_KEY="0d2734c1bd19f2f273201165ca321914" && \
     export PASETO_KEY="0d2734c1bd19f2f273201165ca321914" && \
-    export AWS_ENDPOINT="http://localhost:9000" && \
-    export AWS_REGION="us-east-1" && \
-    export AWS_ACCESS_KEY_ID="minioadmin" && \
-    export AWS_SECRET_ACCESS_KEY="minioadmin" && \
-    export AWS_BUCKET_NAME="horsemarketplace" && \
+    export STORAGE_ENDPOINT="http://$(minikube ip):30009" && \
+    export STORAGE_REGION="us-east-1" && \
+    export STORAGE_ACCESS_KEY_ID="minioadmin" && \
+    export STORAGE_SECRET_ACCESS_KEY="minioadmin" && \
+    export STORAGE_BUCKET_NAME="horsemarketplace" && \
     export ENVIRONMENT="development" && \
+    export REDIS_ADDR="$(minikube ip):30008" && \
     go run cmd/main.go
 
 # Port forward PostgreSQL for local development (alternative to NodePort)

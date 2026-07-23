@@ -19,7 +19,10 @@ func NewZerologService() *ZerologService {
 }
 
 func (zs *ZerologService) Log(ctx context.Context, level LogLevel, msg string, fields map[string]any) {
-	traceID, _ := ctx.Value("traceID").(string)
+	var traceID string
+	if ctx != nil {
+		traceID, _ = ctx.Value("traceID").(string)
+	}
 	function, line := zs.getCallerInfo()
 
 	event := zs.Logger.WithLevel(level.ToZerologLevel()).Str("trace_id", traceID).Str("function", function).Int("line", line)
@@ -34,7 +37,10 @@ func (zs *ZerologService) WithTrace(ctx context.Context, traceID string) context
 }
 
 func (zs *ZerologService) GetLoggerFromContext(c context.Context) Logging {
-	traceID, _ := c.Value("traceID").(string)
+	var traceID string
+	if c != nil {
+		traceID, _ = c.Value("traceID").(string)
+	}
 	logger := zs.Logger.With().Str("trace_id", traceID).Logger()
 	return &ZerologService{Logger: &logger}
 }
