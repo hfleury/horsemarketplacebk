@@ -60,15 +60,18 @@ metadata:
   name: minio-service
   namespace: development
 spec:
+  type: NodePort
   selector:
     app: minio
   ports:
     - name: api
       port: 9000
       targetPort: 9000
+      nodePort: 30009
     - name: console
       port: 9001
       targetPort: 9001
+      nodePort: 30010
 ---
 # Job to create default public bucket
 apiVersion: batch/v1
