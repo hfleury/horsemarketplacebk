@@ -17,8 +17,8 @@ import (
 type ProductRepository interface {
 	Create(ctx context.Context, product *models.Product) (*models.Product, error)
 	FindByID(ctx context.Context, id string) (*models.Product, error)
-	FindAll(ctx context.Context, filters map[string]any) ([]*models.Product, error)
-	FindByCategory(ctx context.Context, categoryID string) ([]*models.Product, error)
+	FindAll(ctx context.Context, filters map[string]any, page, limit int) (items []*models.Product, total int, err error)
+	FindByCategory(ctx context.Context, categoryID string, page, limit int) (items []*models.Product, total int, err error)
 	FindByTextInDescription(ctx context.Context, text string) ([]*models.Product, error)
 	FindByField(ctx context.Context, fieldName string, value string) ([]*models.Product, error)
 	UpdateStatus(ctx context.Context, id string, status models.ProductStatus) error
@@ -201,12 +201,19 @@ func (r *ProductRepoPsql) FindByID(ctx context.Context, id string) (*models.Prod
 	return p, nil
 }
 
-func (r *ProductRepoPsql) FindAll(ctx context.Context, filters map[string]any) ([]*models.Product, error) {
+func (r *ProductRepoPsql) FindAll(ctx context.Context, filters map[string]any, page, limit int) ([]*models.Product, int, error) {
 	// Basic implementation pending more complex filtering logic
-	query := selectFullProduct + ` ORDER BY p.created_at DESC`
-	rows, err := r.psql.Query(ctx, query)
+	offset := (page - 1) * limit
+
+	var total int
+	if err := r.psql.QueryRow(ctx, `SELECT COUNT(*) FROM authentic.products`).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+
+	query := selectFullProduct + ` ORDER BY p.created_at DESC LIMIT $1 OFFSET $2`
+	rows, err := r.psql.Query(ctx, query, limit, offset)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	defer rows.Close()
 
@@ -218,14 +225,21 @@ func (r *ProductRepoPsql) FindAll(ctx context.Context, filters map[string]any) (
 		}
 		products = append(products, p)
 	}
-	return products, nil
+	return products, total, nil
 }
 
-func (r *ProductRepoPsql) FindByCategory(ctx context.Context, categoryID string) ([]*models.Product, error) {
-	query := selectFullProduct + ` WHERE p.category_id = $1 ORDER BY p.created_at DESC`
-	rows, err := r.psql.Query(ctx, query, categoryID)
+func (r *ProductRepoPsql) FindByCategory(ctx context.Context, categoryID string, page, limit int) ([]*models.Product, int, error) {
+	offset := (page - 1) * limit
+
+	var total int
+	if err := r.psql.QueryRow(ctx, `SELECT COUNT(*) FROM authentic.products WHERE category_id = $1`, categoryID).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+
+	query := selectFullProduct + ` WHERE p.category_id = $1 ORDER BY p.created_at DESC LIMIT $2 OFFSET $3`
+	rows, err := r.psql.Query(ctx, query, categoryID, limit, offset)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	defer rows.Close()
 
@@ -237,7 +251,7 @@ func (r *ProductRepoPsql) FindByCategory(ctx context.Context, categoryID string)
 		}
 		products = append(products, p)
 	}
-	return products, nil
+	return products, total, nil
 }
 
 func (r *ProductRepoPsql) FindByTextInDescription(ctx context.Context, text string) ([]*models.Product, error) {

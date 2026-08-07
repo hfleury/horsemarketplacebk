@@ -117,3 +117,87 @@ func TestUpdateStatus_Unauthorized(t *testing.T) {
 
 	assert.Equal(t, services.ErrUnauthorized, err)
 }
+
+func TestSearch_ByCategory_Paginated(t *testing.T) {
+	mockRepo := new(mockProducts.MockProductRepo)
+	mockSettings := new(mockSystem.MockSettingsRepo)
+	logger := config.NewZerologService()
+
+	service := services.NewProductService(mockRepo, mockSettings, logger)
+
+	categoryID := uuid.New().String()
+	items := []*models.Product{{Title: "Horse 1"}, {Title: "Horse 2"}}
+
+	mockRepo.On("FindByCategory", mock.Anything, categoryID, 2, 10).Return(items, 25, nil)
+
+	result, err := service.Search(context.Background(), "", categoryID, nil, 2, 10)
+
+	assert.NoError(t, err)
+	assert.Equal(t, items, result.Items)
+	assert.Equal(t, 25, result.Total)
+	assert.Equal(t, 2, result.Page)
+	assert.Equal(t, 10, result.Limit)
+	mockRepo.AssertExpectations(t)
+}
+
+func TestSearch_FallbackFindAll_Paginated(t *testing.T) {
+	mockRepo := new(mockProducts.MockProductRepo)
+	mockSettings := new(mockSystem.MockSettingsRepo)
+	logger := config.NewZerologService()
+
+	service := services.NewProductService(mockRepo, mockSettings, logger)
+
+	items := []*models.Product{{Title: "Item 1"}}
+
+	mockRepo.On("FindAll", mock.Anything, mock.Anything, 1, 20).Return(items, 1, nil)
+
+	result, err := service.Search(context.Background(), "", "", nil, 1, 20)
+
+	assert.NoError(t, err)
+	assert.Equal(t, items, result.Items)
+	assert.Equal(t, 1, result.Total)
+	assert.Equal(t, 1, result.Page)
+	assert.Equal(t, 20, result.Limit)
+	mockRepo.AssertExpectations(t)
+}
+
+func TestSearch_ByQuery_ReturnsUnpaginatedWrap(t *testing.T) {
+	mockRepo := new(mockProducts.MockProductRepo)
+	mockSettings := new(mockSystem.MockSettingsRepo)
+	logger := config.NewZerologService()
+
+	service := services.NewProductService(mockRepo, mockSettings, logger)
+
+	items := []*models.Product{{Title: "A"}, {Title: "B"}, {Title: "C"}}
+
+	mockRepo.On("FindByTextInDescription", mock.Anything, "saddle").Return(items, nil)
+
+	result, err := service.Search(context.Background(), "saddle", "", nil, 1, 20)
+
+	assert.NoError(t, err)
+	assert.Equal(t, items, result.Items)
+	assert.Equal(t, len(items), result.Total)
+	assert.Equal(t, 1, result.Page)
+	mockRepo.AssertExpectations(t)
+}
+
+func TestSearch_ByFieldMap_ReturnsUnpaginatedWrap(t *testing.T) {
+	mockRepo := new(mockProducts.MockProductRepo)
+	mockSettings := new(mockSystem.MockSettingsRepo)
+	logger := config.NewZerologService()
+
+	service := services.NewProductService(mockRepo, mockSettings, logger)
+
+	items := []*models.Product{{Title: "Truck"}}
+	fieldMap := map[string]string{"make": "Volvo"}
+
+	mockRepo.On("FindByField", mock.Anything, "make", "Volvo").Return(items, nil)
+
+	result, err := service.Search(context.Background(), "", "", fieldMap, 1, 20)
+
+	assert.NoError(t, err)
+	assert.Equal(t, items, result.Items)
+	assert.Equal(t, len(items), result.Total)
+	assert.Equal(t, 1, result.Page)
+	mockRepo.AssertExpectations(t)
+}

@@ -27,20 +27,20 @@ func (m *MockProductRepo) FindByID(ctx context.Context, id string) (*models.Prod
 	return args.Get(0).(*models.Product), args.Error(1)
 }
 
-func (m *MockProductRepo) FindAll(ctx context.Context, filters map[string]any) ([]*models.Product, error) {
-	args := m.Called(ctx, filters)
+func (m *MockProductRepo) FindAll(ctx context.Context, filters map[string]any, page, limit int) ([]*models.Product, int, error) {
+	args := m.Called(ctx, filters, page, limit)
 	if args.Get(0) == nil {
-		return nil, args.Error(1)
+		return nil, args.Int(1), args.Error(2)
 	}
-	return args.Get(0).([]*models.Product), args.Error(1)
+	return args.Get(0).([]*models.Product), args.Int(1), args.Error(2)
 }
 
-func (m *MockProductRepo) FindByCategory(ctx context.Context, categoryID string) ([]*models.Product, error) {
-	args := m.Called(ctx, categoryID)
+func (m *MockProductRepo) FindByCategory(ctx context.Context, categoryID string, page, limit int) ([]*models.Product, int, error) {
+	args := m.Called(ctx, categoryID, page, limit)
 	if args.Get(0) == nil {
-		return nil, args.Error(1)
+		return nil, args.Int(1), args.Error(2)
 	}
-	return args.Get(0).([]*models.Product), args.Error(1)
+	return args.Get(0).([]*models.Product), args.Int(1), args.Error(2)
 }
 
 func (m *MockProductRepo) FindByTextInDescription(ctx context.Context, text string) ([]*models.Product, error) {
