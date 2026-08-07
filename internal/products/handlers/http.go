@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"net/http"
+	"strconv"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -84,8 +85,20 @@ func (h *ProductHandler) List(c *gin.Context) {
 		fieldMap["make"] = make
 	}
 
+	page, err := strconv.Atoi(c.Query("page"))
+	if err != nil || page < 1 {
+		page = 1
+	}
+	limit, err := strconv.Atoi(c.Query("limit"))
+	if err != nil || limit < 1 {
+		limit = 20
+	}
+	if limit > 100 {
+		limit = 100
+	}
+
 	// If no search params, FindAll called inside Search via service logic
-	products, err := h.service.Search(c.Request.Context(), query, categoryID, fieldMap)
+	products, err := h.service.Search(c.Request.Context(), query, categoryID, fieldMap, page, limit)
 	if err != nil {
 		h.logger.Log(c.Request.Context(), config.ErrorLevel, "Failed to list products", map[string]any{"error": err.Error()})
 		c.JSON(http.StatusInternalServerError, common.NewErrorResponse("Failed to list products"))

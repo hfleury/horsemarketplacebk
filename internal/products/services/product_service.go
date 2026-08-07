@@ -19,11 +19,11 @@ var (
 type ProductService interface {
 	Create(ctx context.Context, product *models.Product) (*models.Product, error)
 	FindByID(ctx context.Context, id string) (*models.Product, error)
-	FindAll(ctx context.Context, filters map[string]any) ([]*models.Product, error)
+	FindAll(ctx context.Context, filters map[string]any, page, limit int) (*models.PaginatedProducts, error)
 	UpdateStatus(ctx context.Context, id string, status models.ProductStatus, userID string, isAdmin bool) error
 	Delete(ctx context.Context, id string, userID string, isAdmin bool) error
 	// Specific searches
-	Search(ctx context.Context, query string, categoryID string, fieldMap map[string]string) ([]*models.Product, error)
+	Search(ctx context.Context, query string, categoryID string, fieldMap map[string]string, page, limit int) (*models.PaginatedProducts, error)
 }
 
 type ProductServiceImp struct {
@@ -68,8 +68,12 @@ func (s *ProductServiceImp) FindByID(ctx context.Context, id string) (*models.Pr
 	return s.repo.FindByID(ctx, id)
 }
 
-func (s *ProductServiceImp) FindAll(ctx context.Context, filters map[string]any) ([]*models.Product, error) {
-	return s.repo.FindAll(ctx, filters)
+func (s *ProductServiceImp) FindAll(ctx context.Context, filters map[string]any, page, limit int) (*models.PaginatedProducts, error) {
+	items, total, err := s.repo.FindAll(ctx, filters, page, limit)
+	if err != nil {
+		return nil, err
+	}
+	return &models.PaginatedProducts{Items: items, Total: total, Page: page, Limit: limit}, nil
 }
 
 func (s *ProductServiceImp) UpdateStatus(ctx context.Context, id string, status models.ProductStatus, userID string, isAdmin bool) error {
@@ -126,19 +130,35 @@ func (s *ProductServiceImp) Delete(ctx context.Context, id string, userID string
 	return s.repo.Delete(ctx, id)
 }
 
-func (s *ProductServiceImp) Search(ctx context.Context, query string, categoryID string, fieldMap map[string]string) ([]*models.Product, error) {
+func (s *ProductServiceImp) Search(ctx context.Context, query string, categoryID string, fieldMap map[string]string, page, limit int) (*models.PaginatedProducts, error) {
 	if categoryID != "" {
-		return s.repo.FindByCategory(ctx, categoryID)
+		items, total, err := s.repo.FindByCategory(ctx, categoryID, page, limit)
+		if err != nil {
+			return nil, err
+		}
+		return &models.PaginatedProducts{Items: items, Total: total, Page: page, Limit: limit}, nil
 	}
 	if query != "" {
 		// Detect if it's a field search query e.g. "Model=R6"
 		// or just simple text search
-		return s.repo.FindByTextInDescription(ctx, query)
+		items, err := s.repo.FindByTextInDescription(ctx, query)
+		if err != nil {
+			return nil, err
+		}
+		return &models.PaginatedProducts{Items: items, Total: len(items), Page: 1, Limit: len(items)}, nil
 	}
 	// Iterate field map if provided
 	for k, v := range fieldMap {
-		return s.repo.FindByField(ctx, k, v)
+		items, err := s.repo.FindByField(ctx, k, v)
+		if err != nil {
+			return nil, err
+		}
+		return &models.PaginatedProducts{Items: items, Total: len(items), Page: 1, Limit: len(items)}, nil
 	}
 
-	return s.repo.FindAll(ctx, nil)
+	items, total, err := s.repo.FindAll(ctx, nil, page, limit)
+	if err != nil {
+		return nil, err
+	}
+	return &models.PaginatedProducts{Items: items, Total: total, Page: page, Limit: limit}, nil
 }
