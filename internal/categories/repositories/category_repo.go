@@ -34,7 +34,7 @@ func NewCategoryRepoPsql(psql db.Database, logger config.Logging) *CategoryRepoP
 
 func (r *CategoryRepoPsql) Create(ctx context.Context, category *models.Category) (*models.Category, error) {
 	query := `
-		INSERT INTO authentic.categories (id, name, picture_url, parent_id)
+		INSERT INTO catalog.categories (id, name, picture_url, parent_id)
 		VALUES ($1, $2, $3, $4)
 		RETURNING id, name, picture_url, parent_id, created_at, updated_at
 	`
@@ -64,7 +64,7 @@ func (r *CategoryRepoPsql) Create(ctx context.Context, category *models.Category
 
 func (r *CategoryRepoPsql) Update(ctx context.Context, category *models.Category) (*models.Category, error) {
 	query := `
-		UPDATE authentic.categories
+		UPDATE catalog.categories
 		SET name = $2, picture_url = $3, parent_id = $4, updated_at = NOW()
 		WHERE id = $1
 		RETURNING id, name, picture_url, parent_id, created_at, updated_at
@@ -91,7 +91,7 @@ func (r *CategoryRepoPsql) Update(ctx context.Context, category *models.Category
 
 func (r *CategoryRepoPsql) Delete(ctx context.Context, id string) error {
 	// First check if there are subcategories
-	checkQuery := `SELECT 1 FROM authentic.categories WHERE parent_id = $1 LIMIT 1`
+	checkQuery := `SELECT 1 FROM catalog.categories WHERE parent_id = $1 LIMIT 1`
 	var exists int
 	err := r.psql.QueryRow(ctx, checkQuery, id).Scan(&exists)
 	if err == nil {
@@ -100,7 +100,7 @@ func (r *CategoryRepoPsql) Delete(ctx context.Context, id string) error {
 		return err
 	}
 
-	query := `DELETE FROM authentic.categories WHERE id = $1`
+	query := `DELETE FROM catalog.categories WHERE id = $1`
 	result, err := r.psql.Execute(ctx, query, id)
 	if err != nil {
 		r.logger.Log(ctx, config.ErrorLevel, "Failed to delete category", map[string]any{"error": err.Error()})
@@ -118,7 +118,7 @@ func (r *CategoryRepoPsql) Delete(ctx context.Context, id string) error {
 func (r *CategoryRepoPsql) FindByID(ctx context.Context, id string) (*models.Category, error) {
 	query := `
 		SELECT id, name, picture_url, parent_id, created_at, updated_at
-		FROM authentic.categories
+		FROM catalog.categories
 		WHERE id = $1
 	`
 	row := r.psql.QueryRow(ctx, query, id)
@@ -146,7 +146,7 @@ func (r *CategoryRepoPsql) FindByID(ctx context.Context, id string) (*models.Cat
 func (r *CategoryRepoPsql) FindAll(ctx context.Context) ([]*models.Category, error) {
 	query := `
 		SELECT id, name, picture_url, parent_id, created_at, updated_at
-		FROM authentic.categories
+		FROM catalog.categories
 		ORDER BY created_at ASC
 	`
 	rows, err := r.psql.Query(ctx, query)
@@ -179,7 +179,7 @@ func (r *CategoryRepoPsql) FindAll(ctx context.Context) ([]*models.Category, err
 func (r *CategoryRepoPsql) FindByName(ctx context.Context, name string) (*models.Category, error) {
 	query := `
 		SELECT id, name, picture_url, parent_id, created_at, updated_at
-		FROM authentic.categories
+		FROM catalog.categories
 		WHERE name = $1
 	`
 	row := r.psql.QueryRow(ctx, query, name)

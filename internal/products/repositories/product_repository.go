@@ -48,7 +48,7 @@ func (r *ProductRepoPsql) Create(ctx context.Context, product *models.Product) (
 
 	// 1. Insert into products table
 	queryProd := `
-		INSERT INTO authentic.products (
+		INSERT INTO catalog.products (
 			id, user_id, category_id, type, status, title, price_sek, description, 
 			city, area, transaction_type, views_count
 		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 0)
@@ -91,7 +91,7 @@ func (r *ProductRepoPsql) insertSpecificData(ctx context.Context, tx *sql.Tx, p 
 		if p.Horse == nil {
 			return errors.New("horse data missing")
 		}
-		q := `INSERT INTO authentic.product_horses (product_id, name, age, year_of_birth, gender, height, breed, color, dressage_level, jump_level, orientation, pedigree)
+		q := `INSERT INTO catalog.product_horses (product_id, name, age, year_of_birth, gender, height, breed, color, dressage_level, jump_level, orientation, pedigree)
 		      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`
 
 		_, err := tx.ExecContext(ctx, q, p.ID, p.Horse.Name, p.Horse.Age, p.Horse.YearOfBirth, p.Horse.Gender, p.Horse.Height, p.Horse.Breed, p.Horse.Color, p.Horse.DressageLevel, p.Horse.JumpLevel, p.Horse.Orientation, p.Horse.Pedigree)
@@ -101,7 +101,7 @@ func (r *ProductRepoPsql) insertSpecificData(ctx context.Context, tx *sql.Tx, p 
 		if p.Vehicle == nil {
 			return errors.New("vehicle data missing")
 		}
-		q := `INSERT INTO authentic.product_vehicles (product_id, make, model, year, load_weight, total_weight, condition)
+		q := `INSERT INTO catalog.product_vehicles (product_id, make, model, year, load_weight, total_weight, condition)
 		      VALUES ($1, $2, $3, $4, $5, $6, $7)`
 		_, err := tx.ExecContext(ctx, q, p.ID, p.Vehicle.Make, p.Vehicle.Model, p.Vehicle.Year, p.Vehicle.LoadWeight, p.Vehicle.TotalWeight, p.Vehicle.Condition)
 		return err
@@ -110,7 +110,7 @@ func (r *ProductRepoPsql) insertSpecificData(ctx context.Context, tx *sql.Tx, p 
 		if p.Equipment == nil {
 			return errors.New("equipment data missing")
 		}
-		q := `INSERT INTO authentic.product_equipment (product_id, make, model, size, condition, sub_type, boom_width)
+		q := `INSERT INTO catalog.product_equipment (product_id, make, model, size, condition, sub_type, boom_width)
 		      VALUES ($1, $2, $3, $4, $5, $6, $7)`
 		_, err := tx.ExecContext(ctx, q, p.ID, p.Equipment.Make, p.Equipment.Model, p.Equipment.Size, p.Equipment.Condition, p.Equipment.SubType, p.Equipment.BoomWidth)
 		return err
@@ -130,10 +130,10 @@ var selectFullProduct = `
 		h.name, h.age, h.year_of_birth, h.gender, h.height, h.breed, h.color, h.dressage_level, h.jump_level, h.orientation, h.pedigree,
 		v.make, v.model, v.year, v.load_weight, v.total_weight, v.condition,
 		e.make, e.model, e.size, e.condition, e.sub_type, e.boom_width
-	FROM authentic.products p
-	LEFT JOIN authentic.product_horses h ON p.id = h.product_id
-	LEFT JOIN authentic.product_vehicles v ON p.id = v.product_id
-	LEFT JOIN authentic.product_equipment e ON p.id = e.product_id
+	FROM catalog.products p
+	LEFT JOIN catalog.product_horses h ON p.id = h.product_id
+	LEFT JOIN catalog.product_vehicles v ON p.id = v.product_id
+	LEFT JOIN catalog.product_equipment e ON p.id = e.product_id
 `
 
 func (r *ProductRepoPsql) scanProduct(row interface{ Scan(...any) error }) (*models.Product, error) {
@@ -207,7 +207,7 @@ func (r *ProductRepoPsql) FindAll(ctx context.Context, filters map[string]any, p
 	offset := (page - 1) * limit
 
 	var total int
-	if err := r.psql.QueryRow(ctx, `SELECT COUNT(*) FROM authentic.products`).Scan(&total); err != nil {
+	if err := r.psql.QueryRow(ctx, `SELECT COUNT(*) FROM catalog.products`).Scan(&total); err != nil {
 		return nil, 0, err
 	}
 
@@ -233,7 +233,7 @@ func (r *ProductRepoPsql) FindByCategory(ctx context.Context, categoryID string,
 	offset := (page - 1) * limit
 
 	var total int
-	if err := r.psql.QueryRow(ctx, `SELECT COUNT(*) FROM authentic.products WHERE category_id = $1`, categoryID).Scan(&total); err != nil {
+	if err := r.psql.QueryRow(ctx, `SELECT COUNT(*) FROM catalog.products WHERE category_id = $1`, categoryID).Scan(&total); err != nil {
 		return nil, 0, err
 	}
 
@@ -381,7 +381,7 @@ func (r *ProductRepoPsql) SearchByFilter(ctx context.Context, categoryID, query 
 		whereClause = " WHERE " + strings.Join(conditions, " AND ")
 	}
 
-	countQuery := "SELECT COUNT(*) FROM authentic.products p LEFT JOIN authentic.product_horses h ON p.id = h.product_id" + whereClause
+	countQuery := "SELECT COUNT(*) FROM catalog.products p LEFT JOIN catalog.product_horses h ON p.id = h.product_id" + whereClause
 	var total int
 	if err := r.psql.QueryRow(ctx, countQuery, args...).Scan(&total); err != nil {
 		return nil, 0, err
@@ -409,7 +409,7 @@ func (r *ProductRepoPsql) SearchByFilter(ctx context.Context, categoryID, query 
 }
 
 func (r *ProductRepoPsql) UpdateStatus(ctx context.Context, id string, status models.ProductStatus) error {
-	query := `UPDATE authentic.products SET status = $1, updated_at = NOW() WHERE id = $2`
+	query := `UPDATE catalog.products SET status = $1, updated_at = NOW() WHERE id = $2`
 	_, err := r.psql.Execute(ctx, query, status, id)
 	return err
 }

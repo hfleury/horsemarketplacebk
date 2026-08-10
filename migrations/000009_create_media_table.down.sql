@@ -1,1 +1,1 @@
-DROP TABLE IF NOT EXISTS authentic.media;
+DROP TABLE IF EXISTS authentic.media;

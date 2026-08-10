@@ -27,7 +27,7 @@ func NewSettingsRepoPsql(psql db.Database, logger config.Logging) *SettingsRepoP
 }
 
 func (r *SettingsRepoPsql) Get(ctx context.Context, key string) (string, error) {
-	query := `SELECT value FROM authentic.system_settings WHERE key = $1`
+	query := `SELECT value FROM system.system_settings WHERE key = $1`
 	var value string
 	err := r.psql.QueryRow(ctx, query, key).Scan(&value)
 	if err != nil {
@@ -41,7 +41,7 @@ func (r *SettingsRepoPsql) Get(ctx context.Context, key string) (string, error) 
 
 func (r *SettingsRepoPsql) Set(ctx context.Context, key string, value string) error {
 	query := `
-		INSERT INTO authentic.system_settings (key, value, updated_at)
+		INSERT INTO system.system_settings (key, value, updated_at)
 		VALUES ($1, $2, NOW())
 		ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()
 	`

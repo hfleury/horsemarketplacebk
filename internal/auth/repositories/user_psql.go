@@ -23,7 +23,7 @@ func NewUserRepoPsql(psql db.Database, logger config.Logging) *UserRepoPsql {
 // Insert insert a new user in the database
 func (ur *UserRepoPsql) Insert(ctx context.Context, user *models.User) (*models.User, error) {
 	query := `
-		INSERT INTO authentic.users (username, email, password_hash, role)
+		INSERT INTO auth.users (username, email, password_hash, role)
 		VALUES
 		($1, $2, $3, $4)
 		RETURNING id, username, email, password_hash, is_active, is_verified, last_login, created_at, updated_at, role;
@@ -69,7 +69,7 @@ func (ur *UserRepoPsql) Insert(ctx context.Context, user *models.User) (*models.
 func (ur *UserRepoPsql) IsUsernameTaken(ctx context.Context, username string) (bool, error) {
 	query := `
 		SELECT 1
-		FROM authentic.users
+		FROM auth.users
 		WHERE username = $1
 		LIMIT 1
 	`
@@ -89,7 +89,7 @@ func (ur *UserRepoPsql) IsUsernameTaken(ctx context.Context, username string) (b
 func (ur *UserRepoPsql) IsEmailTaken(ctx context.Context, email string) (bool, error) {
 	query := `
 		SELECT 1
-		FROM authentic.users
+		FROM auth.users
 		WHERE email = $1
 		LIMIT 1
 	`
@@ -109,7 +109,7 @@ func (ur *UserRepoPsql) IsEmailTaken(ctx context.Context, email string) (bool, e
 func (ur *UserRepoPsql) SelectUserByUsername(ctx context.Context, user *models.User) (*models.User, error) {
 	query := `
 		SELECT id, username, email, password_hash, is_active, is_verified, last_login, created_at, updated_at, role
-		FROM authentic.users
+		FROM auth.users
 		WHERE username = $1;
 	`
 	err := ur.psql.QueryRow(ctx, query, user.Username).Scan(
@@ -139,7 +139,7 @@ func (ur *UserRepoPsql) SelectUserByUsername(ctx context.Context, user *models.U
 func (ur *UserRepoPsql) SelectUserByEmail(ctx context.Context, user *models.User) (*models.User, error) {
 	query := `
 		SELECT id, username, email, password_hash, is_active, is_verified, last_login, created_at, updated_at, role
-		FROM authentic.users
+		FROM auth.users
 		WHERE email = $1;
 	`
 	err := ur.psql.QueryRow(ctx, query, user.Email).Scan(
@@ -169,7 +169,7 @@ func (ur *UserRepoPsql) SelectUserByEmail(ctx context.Context, user *models.User
 func (ur *UserRepoPsql) SelectUserByID(ctx context.Context, id string) (*models.User, error) {
 	query := `
 		SELECT id, username, email, password_hash, is_active, is_verified, last_login, created_at, updated_at, role
-		FROM authentic.users
+		FROM auth.users
 		WHERE id = $1;
 	`
 	user := &models.User{}
@@ -198,7 +198,7 @@ func (ur *UserRepoPsql) SelectUserByID(ctx context.Context, id string) (*models.
 
 // SetVerified updates the user's verified status
 func (ur *UserRepoPsql) SetVerified(ctx context.Context, id string, verified bool) error {
-	query := `UPDATE authentic.users SET is_verified = $2, updated_at = NOW() WHERE id = $1`
+	query := `UPDATE auth.users SET is_verified = $2, updated_at = NOW() WHERE id = $1`
 	_, err := ur.psql.Execute(ctx, query, id, verified)
 	if err != nil {
 		ur.logger.Log(ctx, config.ErrorLevel, "Failed to set user verified", map[string]any{"error": err.Error()})
@@ -210,7 +210,7 @@ func (ur *UserRepoPsql) SetVerified(ctx context.Context, id string, verified boo
 func (ur *UserRepoPsql) FindAll(ctx context.Context) ([]*models.User, error) {
 	query := `
 		SELECT id, username, email, password_hash, is_active, is_verified, last_login, created_at, updated_at, role
-		FROM authentic.users
+		FROM auth.users
 		ORDER BY created_at DESC;
 	`
 	rows, err := ur.psql.Query(ctx, query)
@@ -252,7 +252,7 @@ func (ur *UserRepoPsql) FindAll(ctx context.Context) ([]*models.User, error) {
 
 // UpdateStatus updates the user's active status
 func (ur *UserRepoPsql) UpdateStatus(ctx context.Context, id string, isActive bool) error {
-	query := `UPDATE authentic.users SET is_active = $2, updated_at = NOW() WHERE id = $1`
+	query := `UPDATE auth.users SET is_active = $2, updated_at = NOW() WHERE id = $1`
 	_, err := ur.psql.Execute(ctx, query, id, isActive)
 	if err != nil {
 		ur.logger.Log(ctx, config.ErrorLevel, "Failed to update user status", map[string]any{

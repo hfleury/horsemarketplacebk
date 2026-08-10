@@ -24,7 +24,7 @@ func NewPostgresMediaRepository(db *sql.DB) *PostgresMediaRepository {
 
 func (r *PostgresMediaRepository) Create(ctx context.Context, m *Media) (*Media, error) {
 	query := `
-		INSERT INTO authentic.media (
+		INSERT INTO media.media (
 			file_name, original_name, mime_type, size_bytes, url, bucket_name, region, created_at, updated_at
 		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 		RETURNING id
@@ -45,7 +45,7 @@ func (r *PostgresMediaRepository) Create(ctx context.Context, m *Media) (*Media,
 func (r *PostgresMediaRepository) FindByID(ctx context.Context, id uuid.UUID) (*Media, error) {
 	query := `
 		SELECT id, file_name, original_name, mime_type, size_bytes, url, bucket_name, region, created_at, updated_at
-		FROM authentic.media
+		FROM media.media
 		WHERE id = $1
 	`
 	m := &Media{}
@@ -64,7 +64,7 @@ func (r *PostgresMediaRepository) FindByID(ctx context.Context, id uuid.UUID) (*
 
 func (r *PostgresMediaRepository) UpdateVariants(ctx context.Context, id uuid.UUID, variants any) error {
 	query := `
-		UPDATE authentic.media
+		UPDATE media.media
 		SET variants = $1, updated_at = NOW()
 		WHERE id = $2
 	`
