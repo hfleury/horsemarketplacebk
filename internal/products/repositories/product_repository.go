@@ -21,6 +21,7 @@ type ProductRepository interface {
 	FindByCategory(ctx context.Context, categoryID string, page, limit int) (items []*models.Product, total int, err error)
 	FindByTextInDescription(ctx context.Context, text string) ([]*models.Product, error)
 	FindByField(ctx context.Context, fieldName string, value string) ([]*models.Product, error)
+	SearchByFilter(ctx context.Context, categoryID, query string, filter *models.HorseFilter, page, limit int) (items []*models.Product, total int, err error)
 	UpdateStatus(ctx context.Context, id string, status models.ProductStatus) error
 	Delete(ctx context.Context, id string) error
 	// Add Update method later as it's complex
@@ -325,6 +326,86 @@ func (r *ProductRepoPsql) FindByField(ctx context.Context, fieldName string, val
 		products = append(products, p)
 	}
 	return products, nil
+}
+
+func (r *ProductRepoPsql) SearchByFilter(ctx context.Context, categoryID, query string, filter *models.HorseFilter, page, limit int) ([]*models.Product, int, error) {
+	offset := (page - 1) * limit
+
+	var conditions []string
+	var args []any
+
+	addCondition := func(clause string, value any) {
+		args = append(args, value)
+		conditions = append(conditions, fmt.Sprintf(clause, len(args)))
+	}
+
+	if categoryID != "" {
+		addCondition("p.category_id = $%d", categoryID)
+	}
+	if query != "" {
+		args = append(args, "%"+query+"%")
+		conditions = append(conditions, fmt.Sprintf("(p.description ILIKE $%d OR p.title ILIKE $%d)", len(args), len(args)))
+	}
+	if filter != nil {
+		if filter.Breed != nil && *filter.Breed != "" {
+			addCondition("h.breed = $%d", *filter.Breed)
+		}
+		if filter.Gender != nil && *filter.Gender != "" {
+			addCondition("h.gender = $%d", *filter.Gender)
+		}
+		if filter.Discipline != nil && *filter.Discipline != "" {
+			addCondition("h.orientation = $%d", *filter.Discipline)
+		}
+		if filter.MinAge != nil {
+			addCondition("h.age >= $%d", *filter.MinAge)
+		}
+		if filter.MaxAge != nil {
+			addCondition("h.age <= $%d", *filter.MaxAge)
+		}
+		if filter.MinHeight != nil {
+			addCondition("h.height >= $%d", *filter.MinHeight)
+		}
+		if filter.MaxHeight != nil {
+			addCondition("h.height <= $%d", *filter.MaxHeight)
+		}
+		if filter.MinPrice != nil {
+			addCondition("p.price_sek >= $%d", *filter.MinPrice)
+		}
+		if filter.MaxPrice != nil {
+			addCondition("p.price_sek <= $%d", *filter.MaxPrice)
+		}
+	}
+
+	whereClause := ""
+	if len(conditions) > 0 {
+		whereClause = " WHERE " + strings.Join(conditions, " AND ")
+	}
+
+	countQuery := "SELECT COUNT(*) FROM authentic.products p LEFT JOIN authentic.product_horses h ON p.id = h.product_id" + whereClause
+	var total int
+	if err := r.psql.QueryRow(ctx, countQuery, args...).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+
+	dataArgs := append(append([]any{}, args...), limit, offset)
+	dataQuery := selectFullProduct + whereClause +
+		fmt.Sprintf(" ORDER BY p.created_at DESC LIMIT $%d OFFSET $%d", len(dataArgs)-1, len(dataArgs))
+
+	rows, err := r.psql.Query(ctx, dataQuery, dataArgs...)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	var products []*models.Product
+	for rows.Next() {
+		p, err := r.scanProduct(rows)
+		if err != nil {
+			continue
+		}
+		products = append(products, p)
+	}
+	return products, total, nil
 }
 
 func (r *ProductRepoPsql) UpdateStatus(ctx context.Context, id string, status models.ProductStatus) error {

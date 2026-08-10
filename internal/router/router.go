@@ -5,18 +5,20 @@ import (
 	"github.com/hfleury/horsemarketplacebk/config"
 	"github.com/hfleury/horsemarketplacebk/internal/auth/services"
 	categoryServices "github.com/hfleury/horsemarketplacebk/internal/categories/services"
+	horseAttributeServices "github.com/hfleury/horsemarketplacebk/internal/horseattributes/services"
 	"github.com/hfleury/horsemarketplacebk/internal/media"
 	"github.com/hfleury/horsemarketplacebk/internal/middleware"
 	productHandlers "github.com/hfleury/horsemarketplacebk/internal/products/handlers"
 	productServices "github.com/hfleury/horsemarketplacebk/internal/products/services"
 )
 
-func SetupRouter(router *gin.Engine, logger config.Logging, userService *services.UserService, tokenService *services.TokenService, categoryService *categoryServices.CategoryService, mediaService *media.MediaService, productService productServices.ProductService, productHandler *productHandlers.ProductHandler) *gin.Engine {
+func SetupRouter(router *gin.Engine, logger config.Logging, userService *services.UserService, tokenService *services.TokenService, categoryService *categoryServices.CategoryService, mediaService *media.MediaService, productService productServices.ProductService, productHandler *productHandlers.ProductHandler, horseAttributeService *horseAttributeServices.HorseAttributeService) *gin.Engine {
 	router.Use(middleware.CORSMiddleware())
 	registerUserRoutes(router, logger, userService, tokenService)
 	registerCategoryRoutes(router, logger, categoryService, tokenService)
 	registerMediaRoutes(router, logger, mediaService, tokenService)
 	registerProductRoutes(router, logger, productHandler, tokenService)
+	registerHorseAttributeRoutes(router, logger, horseAttributeService, tokenService)
 
 	return router
 }

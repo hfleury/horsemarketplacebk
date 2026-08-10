@@ -16,6 +16,8 @@ import (
 	categoryServices "github.com/hfleury/horsemarketplacebk/internal/categories/services"
 	"github.com/hfleury/horsemarketplacebk/internal/db"
 	"github.com/hfleury/horsemarketplacebk/internal/email"
+	horseAttributeRepos "github.com/hfleury/horsemarketplacebk/internal/horseattributes/repositories"
+	horseAttributeServices "github.com/hfleury/horsemarketplacebk/internal/horseattributes/services"
 	"github.com/hfleury/horsemarketplacebk/internal/media"
 	"github.com/hfleury/horsemarketplacebk/internal/middleware"
 	mockemail "github.com/hfleury/horsemarketplacebk/internal/mocks/email"
@@ -62,12 +64,14 @@ func initializeApp(ctx context.Context, configService config.Configuration, newD
 	categoryRepo := categoryRepos.NewCategoryRepoPsql(db, logger)
 	systemSettingsRepo := system.NewSettingsRepoPsql(db, logger)
 	productRepo := productRepos.NewProductRepoPsql(db, logger)
+	horseAttributeRepo := horseAttributeRepos.NewHorseAttributeRepoPsql(db, logger)
 
 	// Services
 	tokenService := services.NewTokenService(configService.GetConfig(), logger)
 	userService := services.NewUserService(userRepo, logger, tokenService, sessionRepo)
 	categoryService := categoryServices.NewCategoryService(categoryRepo, logger)
 	productService := productServices.NewProductService(productRepo, systemSettingsRepo, logger)
+	horseAttributeService := horseAttributeServices.NewHorseAttributeService(horseAttributeRepo, logger)
 
 	// Handlers
 	productHandler := productHandlers.NewProductHandler(productService, logger)
@@ -156,7 +160,7 @@ func initializeApp(ctx context.Context, configService config.Configuration, newD
 	server.Use(middleware.LoggerMiddleware(logger))
 
 	// routes
-	server = router.SetupRouter(server, logger, userService, tokenService, categoryService, mediaService, productService, productHandler)
+	server = router.SetupRouter(server, logger, userService, tokenService, categoryService, mediaService, productService, productHandler, horseAttributeService)
 
 	return server, nil
 }

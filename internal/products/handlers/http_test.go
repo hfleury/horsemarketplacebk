@@ -23,7 +23,7 @@ func TestList_DefaultsPageAndLimit(t *testing.T) {
 	handler := newTestProductHandler(mockService)
 
 	result := &models.PaginatedProducts{Items: []*models.Product{}, Total: 0, Page: 1, Limit: 20}
-	mockService.On("Search", mock.Anything, "", "", map[string]string{}, 1, 20).Return(result, nil)
+	mockService.On("Search", mock.Anything, "", "", map[string]string{}, (*models.HorseFilter)(nil), 1, 20).Return(result, nil)
 
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
@@ -41,7 +41,7 @@ func TestList_LimitClampedTo100(t *testing.T) {
 	handler := newTestProductHandler(mockService)
 
 	result := &models.PaginatedProducts{Items: []*models.Product{}, Total: 0, Page: 1, Limit: 100}
-	mockService.On("Search", mock.Anything, "", "", map[string]string{}, 1, 100).Return(result, nil)
+	mockService.On("Search", mock.Anything, "", "", map[string]string{}, (*models.HorseFilter)(nil), 1, 100).Return(result, nil)
 
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
@@ -62,7 +62,7 @@ func TestList_InvalidPageFallsBackToOne(t *testing.T) {
 		handler := newTestProductHandler(mockService)
 
 		result := &models.PaginatedProducts{Items: []*models.Product{}, Total: 0, Page: 1, Limit: 20}
-		mockService.On("Search", mock.Anything, "", "", map[string]string{}, 1, 20).Return(result, nil)
+		mockService.On("Search", mock.Anything, "", "", map[string]string{}, (*models.HorseFilter)(nil), 1, 20).Return(result, nil)
 
 		w := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(w)
@@ -86,7 +86,7 @@ func TestList_SuccessReturnsPaginatedData(t *testing.T) {
 		Page:  1,
 		Limit: 20,
 	}
-	mockService.On("Search", mock.Anything, "", "", map[string]string{}, 1, 20).Return(result, nil)
+	mockService.On("Search", mock.Anything, "", "", map[string]string{}, (*models.HorseFilter)(nil), 1, 20).Return(result, nil)
 
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)

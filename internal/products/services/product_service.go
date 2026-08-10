@@ -23,7 +23,7 @@ type ProductService interface {
 	UpdateStatus(ctx context.Context, id string, status models.ProductStatus, userID string, isAdmin bool) error
 	Delete(ctx context.Context, id string, userID string, isAdmin bool) error
 	// Specific searches
-	Search(ctx context.Context, query string, categoryID string, fieldMap map[string]string, page, limit int) (*models.PaginatedProducts, error)
+	Search(ctx context.Context, query string, categoryID string, fieldMap map[string]string, horseFilter *models.HorseFilter, page, limit int) (*models.PaginatedProducts, error)
 }
 
 type ProductServiceImp struct {
@@ -130,24 +130,8 @@ func (s *ProductServiceImp) Delete(ctx context.Context, id string, userID string
 	return s.repo.Delete(ctx, id)
 }
 
-func (s *ProductServiceImp) Search(ctx context.Context, query string, categoryID string, fieldMap map[string]string, page, limit int) (*models.PaginatedProducts, error) {
-	if categoryID != "" {
-		items, total, err := s.repo.FindByCategory(ctx, categoryID, page, limit)
-		if err != nil {
-			return nil, err
-		}
-		return &models.PaginatedProducts{Items: items, Total: total, Page: page, Limit: limit}, nil
-	}
-	if query != "" {
-		// Detect if it's a field search query e.g. "Model=R6"
-		// or just simple text search
-		items, err := s.repo.FindByTextInDescription(ctx, query)
-		if err != nil {
-			return nil, err
-		}
-		return &models.PaginatedProducts{Items: items, Total: len(items), Page: 1, Limit: len(items)}, nil
-	}
-	// Iterate field map if provided
+func (s *ProductServiceImp) Search(ctx context.Context, query string, categoryID string, fieldMap map[string]string, horseFilter *models.HorseFilter, page, limit int) (*models.PaginatedProducts, error) {
+	// Iterate field map if provided (vehicle/equipment model/make filtering — unchanged, single-key-wins behavior preserved)
 	for k, v := range fieldMap {
 		items, err := s.repo.FindByField(ctx, k, v)
 		if err != nil {
@@ -156,7 +140,7 @@ func (s *ProductServiceImp) Search(ctx context.Context, query string, categoryID
 		return &models.PaginatedProducts{Items: items, Total: len(items), Page: 1, Limit: len(items)}, nil
 	}
 
-	items, total, err := s.repo.FindAll(ctx, nil, page, limit)
+	items, total, err := s.repo.SearchByFilter(ctx, categoryID, query, horseFilter, page, limit)
 	if err != nil {
 		return nil, err
 	}
