@@ -5,6 +5,7 @@ import (
 	"github.com/hfleury/horsemarketplacebk/config"
 	"github.com/hfleury/horsemarketplacebk/internal/auth/services"
 	categoryServices "github.com/hfleury/horsemarketplacebk/internal/categories/services"
+	"github.com/hfleury/horsemarketplacebk/internal/geocoding"
 	horseAttributeServices "github.com/hfleury/horsemarketplacebk/internal/horseattributes/services"
 	"github.com/hfleury/horsemarketplacebk/internal/media"
 	"github.com/hfleury/horsemarketplacebk/internal/middleware"
@@ -12,13 +13,14 @@ import (
 	productServices "github.com/hfleury/horsemarketplacebk/internal/products/services"
 )
 
-func SetupRouter(router *gin.Engine, logger config.Logging, userService *services.UserService, tokenService *services.TokenService, categoryService *categoryServices.CategoryService, mediaService *media.MediaService, productService productServices.ProductService, productHandler *productHandlers.ProductHandler, horseAttributeService *horseAttributeServices.HorseAttributeService) *gin.Engine {
+func SetupRouter(router *gin.Engine, logger config.Logging, userService *services.UserService, tokenService *services.TokenService, categoryService *categoryServices.CategoryService, mediaService *media.MediaService, productService productServices.ProductService, productHandler *productHandlers.ProductHandler, horseAttributeService *horseAttributeServices.HorseAttributeService, geocodingHandler *geocoding.GeocodingHandler) *gin.Engine {
 	router.Use(middleware.CORSMiddleware())
 	registerUserRoutes(router, logger, userService, tokenService)
 	registerCategoryRoutes(router, logger, categoryService, tokenService)
 	registerMediaRoutes(router, logger, mediaService, tokenService)
 	registerProductRoutes(router, logger, productHandler, tokenService)
 	registerHorseAttributeRoutes(router, logger, horseAttributeService, tokenService)
+	registerGeocodingRoutes(router, geocodingHandler)
 
 	return router
 }
@@ -40,4 +42,9 @@ func registerProductRoutes(router *gin.Engine, logger config.Logging, handler *p
 			protected.PATCH("/:id/status", handler.UpdateStatus)
 		}
 	}
+}
+
+func registerGeocodingRoutes(router *gin.Engine, handler *geocoding.GeocodingHandler) {
+	v1 := router.Group("/api/v1")
+	v1.GET("/geocode", handler.Resolve)
 }

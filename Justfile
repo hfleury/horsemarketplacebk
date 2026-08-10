@@ -124,3 +124,8 @@ migrate-version:
 migrate-create NAME:
     @echo "Creating new migration: {{NAME}}"
     migrate create -ext sql -dir migrations -seq {{NAME}}
+
+# Backfill latitude/longitude for existing listings missing coordinates
+backfill-geocode:
+    @echo "Backfilling geocoded coordinates for existing listings..."
+    go run ./cmd/backfillgeocode

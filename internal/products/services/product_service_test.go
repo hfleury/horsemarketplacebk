@@ -6,6 +6,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/hfleury/horsemarketplacebk/config"
+	mockGeocoding "github.com/hfleury/horsemarketplacebk/internal/mocks/geocoding"
 	mockProducts "github.com/hfleury/horsemarketplacebk/internal/mocks/products"
 	mockSystem "github.com/hfleury/horsemarketplacebk/internal/mocks/system"
 	"github.com/hfleury/horsemarketplacebk/internal/products/models"
@@ -19,7 +20,7 @@ func TestCreateProduct_ApprovalRequired(t *testing.T) {
 	mockSettings := new(mockSystem.MockSettingsRepo)
 	logger := config.NewZerologService()
 
-	service := services.NewProductService(mockRepo, mockSettings, logger)
+	service := services.NewProductService(mockRepo, mockSettings, logger, new(mockGeocoding.MockGeocodingClient))
 
 	// Setup: Approval IS required
 	mockSettings.On("IsProductApprovalRequired", mock.Anything).Return(true, nil)
@@ -47,7 +48,7 @@ func TestCreateProduct_NoApprovalRequired(t *testing.T) {
 	mockSettings := new(mockSystem.MockSettingsRepo)
 	logger := config.NewZerologService()
 
-	service := services.NewProductService(mockRepo, mockSettings, logger)
+	service := services.NewProductService(mockRepo, mockSettings, logger, new(mockGeocoding.MockGeocodingClient))
 
 	// Setup: Approval NOT required
 	mockSettings.On("IsProductApprovalRequired", mock.Anything).Return(false, nil)
@@ -72,7 +73,7 @@ func TestUpdateStatus_UserPublish_ApprovalRequired(t *testing.T) {
 	mockSettings := new(mockSystem.MockSettingsRepo)
 	logger := config.NewZerologService()
 
-	service := services.NewProductService(mockRepo, mockSettings, logger)
+	service := services.NewProductService(mockRepo, mockSettings, logger, new(mockGeocoding.MockGeocodingClient))
 
 	userID := uuid.New()
 	productID := uuid.New()
@@ -99,7 +100,7 @@ func TestUpdateStatus_Unauthorized(t *testing.T) {
 	mockSettings := new(mockSystem.MockSettingsRepo)
 	logger := config.NewZerologService()
 
-	service := services.NewProductService(mockRepo, mockSettings, logger)
+	service := services.NewProductService(mockRepo, mockSettings, logger, new(mockGeocoding.MockGeocodingClient))
 
 	ownerID := uuid.New()
 	otherUserID := uuid.New()
@@ -123,15 +124,15 @@ func TestSearch_ByCategory_Paginated(t *testing.T) {
 	mockSettings := new(mockSystem.MockSettingsRepo)
 	logger := config.NewZerologService()
 
-	service := services.NewProductService(mockRepo, mockSettings, logger)
+	service := services.NewProductService(mockRepo, mockSettings, logger, new(mockGeocoding.MockGeocodingClient))
 
 	categoryID := uuid.New().String()
 	items := []*models.Product{{Title: "Horse 1"}, {Title: "Horse 2"}}
 
 	// categoryID/query-only search now goes through the unified SearchByFilter path.
-	mockRepo.On("SearchByFilter", mock.Anything, categoryID, "", (*models.HorseFilter)(nil), 2, 10).Return(items, 25, nil)
+	mockRepo.On("SearchByFilter", mock.Anything, categoryID, "", (*models.HorseFilter)(nil), (*models.LocationFilter)(nil), 2, 10).Return(items, 25, nil)
 
-	result, err := service.Search(context.Background(), "", categoryID, nil, nil, 2, 10)
+	result, err := service.Search(context.Background(), "", categoryID, nil, nil, nil, 2, 10)
 
 	assert.NoError(t, err)
 	assert.Equal(t, items, result.Items)
@@ -146,13 +147,13 @@ func TestSearch_NoFilters_Paginated(t *testing.T) {
 	mockSettings := new(mockSystem.MockSettingsRepo)
 	logger := config.NewZerologService()
 
-	service := services.NewProductService(mockRepo, mockSettings, logger)
+	service := services.NewProductService(mockRepo, mockSettings, logger, new(mockGeocoding.MockGeocodingClient))
 
 	items := []*models.Product{{Title: "Item 1"}}
 
-	mockRepo.On("SearchByFilter", mock.Anything, "", "", (*models.HorseFilter)(nil), 1, 20).Return(items, 1, nil)
+	mockRepo.On("SearchByFilter", mock.Anything, "", "", (*models.HorseFilter)(nil), (*models.LocationFilter)(nil), 1, 20).Return(items, 1, nil)
 
-	result, err := service.Search(context.Background(), "", "", nil, nil, 1, 20)
+	result, err := service.Search(context.Background(), "", "", nil, nil, nil, 1, 20)
 
 	assert.NoError(t, err)
 	assert.Equal(t, items, result.Items)
@@ -167,16 +168,16 @@ func TestSearch_ByQuery_Paginated(t *testing.T) {
 	mockSettings := new(mockSystem.MockSettingsRepo)
 	logger := config.NewZerologService()
 
-	service := services.NewProductService(mockRepo, mockSettings, logger)
+	service := services.NewProductService(mockRepo, mockSettings, logger, new(mockGeocoding.MockGeocodingClient))
 
 	items := []*models.Product{{Title: "A"}, {Title: "B"}, {Title: "C"}}
 
 	// Intentional behavior change from the pre-HM-25 unpaginated query-only wrap:
 	// query-only search now shares the paginated SearchByFilter path with every
 	// other filter combination (see plan Risks/rollback).
-	mockRepo.On("SearchByFilter", mock.Anything, "", "saddle", (*models.HorseFilter)(nil), 1, 20).Return(items, 3, nil)
+	mockRepo.On("SearchByFilter", mock.Anything, "", "saddle", (*models.HorseFilter)(nil), (*models.LocationFilter)(nil), 1, 20).Return(items, 3, nil)
 
-	result, err := service.Search(context.Background(), "saddle", "", nil, nil, 1, 20)
+	result, err := service.Search(context.Background(), "saddle", "", nil, nil, nil, 1, 20)
 
 	assert.NoError(t, err)
 	assert.Equal(t, items, result.Items)
@@ -190,14 +191,14 @@ func TestSearch_ByFieldMap_ReturnsUnpaginatedWrap(t *testing.T) {
 	mockSettings := new(mockSystem.MockSettingsRepo)
 	logger := config.NewZerologService()
 
-	service := services.NewProductService(mockRepo, mockSettings, logger)
+	service := services.NewProductService(mockRepo, mockSettings, logger, new(mockGeocoding.MockGeocodingClient))
 
 	items := []*models.Product{{Title: "Truck"}}
 	fieldMap := map[string]string{"make": "Volvo"}
 
 	mockRepo.On("FindByField", mock.Anything, "make", "Volvo").Return(items, nil)
 
-	result, err := service.Search(context.Background(), "", "", fieldMap, nil, 1, 20)
+	result, err := service.Search(context.Background(), "", "", fieldMap, nil, nil, 1, 20)
 
 	assert.NoError(t, err)
 	assert.Equal(t, items, result.Items)
@@ -211,7 +212,7 @@ func TestSearch_ByHorseFilter_CombinesFieldsAndPaginates(t *testing.T) {
 	mockSettings := new(mockSystem.MockSettingsRepo)
 	logger := config.NewZerologService()
 
-	service := services.NewProductService(mockRepo, mockSettings, logger)
+	service := services.NewProductService(mockRepo, mockSettings, logger, new(mockGeocoding.MockGeocodingClient))
 
 	items := []*models.Product{{Title: "Warmblood"}}
 	breed := "Warmblood"
@@ -223,14 +224,34 @@ func TestSearch_ByHorseFilter_CombinesFieldsAndPaginates(t *testing.T) {
 		MaxPrice: &maxPrice,
 	}
 
-	mockRepo.On("SearchByFilter", mock.Anything, "", "", horseFilter, 1, 20).Return(items, 1, nil)
+	mockRepo.On("SearchByFilter", mock.Anything, "", "", horseFilter, (*models.LocationFilter)(nil), 1, 20).Return(items, 1, nil)
 
-	result, err := service.Search(context.Background(), "", "", nil, horseFilter, 1, 20)
+	result, err := service.Search(context.Background(), "", "", nil, horseFilter, nil, 1, 20)
 
 	assert.NoError(t, err)
 	assert.Equal(t, items, result.Items)
 	assert.Equal(t, 1, result.Total)
 	assert.Equal(t, 1, result.Page)
 	assert.Equal(t, 20, result.Limit)
+	mockRepo.AssertExpectations(t)
+}
+
+func TestSearch_ByLocationFilter_ForwardsToRepo(t *testing.T) {
+	mockRepo := new(mockProducts.MockProductRepo)
+	mockSettings := new(mockSystem.MockSettingsRepo)
+	logger := config.NewZerologService()
+
+	service := services.NewProductService(mockRepo, mockSettings, logger, new(mockGeocoding.MockGeocodingClient))
+
+	items := []*models.Product{{Title: "Nearby Horse"}}
+	locationFilter := &models.LocationFilter{Lat: 59.3293, Lng: 18.0686, RadiusKm: 50}
+
+	mockRepo.On("SearchByFilter", mock.Anything, "", "", (*models.HorseFilter)(nil), locationFilter, 1, 20).Return(items, 1, nil)
+
+	result, err := service.Search(context.Background(), "", "", nil, nil, locationFilter, 1, 20)
+
+	assert.NoError(t, err)
+	assert.Equal(t, items, result.Items)
+	assert.Equal(t, 1, result.Total)
 	mockRepo.AssertExpectations(t)
 }

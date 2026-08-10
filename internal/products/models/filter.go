@@ -14,3 +14,12 @@ type HorseFilter struct {
 	MinPrice   *float64
 	MaxPrice   *float64
 }
+
+// LocationFilter holds a search origin and radius for proximity search.
+// Kept separate from HorseFilter since it applies to all listing types
+// (horse, vehicle, equipment), not just horses.
+type LocationFilter struct {
+	Lat      float64
+	Lng      float64
+	RadiusKm float64
+}

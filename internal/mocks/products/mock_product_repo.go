@@ -59,8 +59,8 @@ func (m *MockProductRepo) FindByField(ctx context.Context, fieldName string, val
 	return args.Get(0).([]*models.Product), args.Error(1)
 }
 
-func (m *MockProductRepo) SearchByFilter(ctx context.Context, categoryID, query string, horseFilter *models.HorseFilter, page, limit int) ([]*models.Product, int, error) {
-	args := m.Called(ctx, categoryID, query, horseFilter, page, limit)
+func (m *MockProductRepo) SearchByFilter(ctx context.Context, categoryID, query string, horseFilter *models.HorseFilter, locationFilter *models.LocationFilter, page, limit int) ([]*models.Product, int, error) {
+	args := m.Called(ctx, categoryID, query, horseFilter, locationFilter, page, limit)
 	if args.Get(0) == nil {
 		return nil, args.Int(1), args.Error(2)
 	}
