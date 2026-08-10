@@ -45,8 +45,8 @@ func (m *MockProductService) Delete(ctx context.Context, id string, userID strin
 	return args.Error(0)
 }
 
-func (m *MockProductService) Search(ctx context.Context, query string, categoryID string, fieldMap map[string]string, horseFilter *models.HorseFilter, page, limit int) (*models.PaginatedProducts, error) {
-	args := m.Called(ctx, query, categoryID, fieldMap, horseFilter, page, limit)
+func (m *MockProductService) Search(ctx context.Context, query string, categoryID string, fieldMap map[string]string, horseFilter *models.HorseFilter, locationFilter *models.LocationFilter, page, limit int) (*models.PaginatedProducts, error) {
+	args := m.Called(ctx, query, categoryID, fieldMap, horseFilter, locationFilter, page, limit)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}

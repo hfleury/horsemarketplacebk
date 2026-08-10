@@ -37,6 +37,8 @@ type Product struct {
 	Description     *string       `json:"description"`
 	City            *string       `json:"city"`
 	Area            *string       `json:"area"`
+	Latitude        *float64      `json:"latitude"`
+	Longitude       *float64      `json:"longitude"`
 	TransactionType *string       `json:"transaction_type"`
 	ViewsCount      int           `json:"views_count"`
 	CreatedAt       time.Time     `json:"created_at"`

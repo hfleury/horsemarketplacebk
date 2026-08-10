@@ -16,6 +16,7 @@ import (
 	categoryServices "github.com/hfleury/horsemarketplacebk/internal/categories/services"
 	"github.com/hfleury/horsemarketplacebk/internal/db"
 	"github.com/hfleury/horsemarketplacebk/internal/email"
+	"github.com/hfleury/horsemarketplacebk/internal/geocoding"
 	horseAttributeRepos "github.com/hfleury/horsemarketplacebk/internal/horseattributes/repositories"
 	horseAttributeServices "github.com/hfleury/horsemarketplacebk/internal/horseattributes/services"
 	"github.com/hfleury/horsemarketplacebk/internal/media"
@@ -70,11 +71,13 @@ func initializeApp(ctx context.Context, configService config.Configuration, newD
 	tokenService := services.NewTokenService(configService.GetConfig(), logger)
 	userService := services.NewUserService(userRepo, logger, tokenService, sessionRepo)
 	categoryService := categoryServices.NewCategoryService(categoryRepo, logger)
-	productService := productServices.NewProductService(productRepo, systemSettingsRepo, logger)
+	mapboxClient := geocoding.NewMapboxClient(configService.GetConfig().Mapbox.APIKey)
+	productService := productServices.NewProductService(productRepo, systemSettingsRepo, logger, mapboxClient)
 	horseAttributeService := horseAttributeServices.NewHorseAttributeService(horseAttributeRepo, logger)
 
 	// Handlers
 	productHandler := productHandlers.NewProductHandler(productService, logger)
+	geocodingHandler := geocoding.NewGeocodingHandler(mapboxClient)
 
 	// Asynq Client & Worker
 	redisAddr := os.Getenv("REDIS_ADDR")
@@ -160,7 +163,7 @@ func initializeApp(ctx context.Context, configService config.Configuration, newD
 	server.Use(middleware.LoggerMiddleware(logger))
 
 	// routes
-	server = router.SetupRouter(server, logger, userService, tokenService, categoryService, mediaService, productService, productHandler, horseAttributeService)
+	server = router.SetupRouter(server, logger, userService, tokenService, categoryService, mediaService, productService, productHandler, horseAttributeService, geocodingHandler)
 
 	return server, nil
 }

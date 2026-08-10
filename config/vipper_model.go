@@ -15,6 +15,11 @@ type AllConfiguration struct {
 	Env       string         `mapstructure:"environment"`
 	SMTP      SMTPConfig     `mapstructure:"smtp"`
 	Storage   StorageConfig  `mapstructure:"storage"`
+	Mapbox    MapboxConfig   `mapstructure:"mapbox"`
+}
+
+type MapboxConfig struct {
+	APIKey string `mapstructure:"mapbox_api_key"`
 }
 
 type StorageConfig struct {

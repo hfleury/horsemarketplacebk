@@ -21,7 +21,7 @@ type ProductRepository interface {
 	FindByCategory(ctx context.Context, categoryID string, page, limit int) (items []*models.Product, total int, err error)
 	FindByTextInDescription(ctx context.Context, text string) ([]*models.Product, error)
 	FindByField(ctx context.Context, fieldName string, value string) ([]*models.Product, error)
-	SearchByFilter(ctx context.Context, categoryID, query string, filter *models.HorseFilter, page, limit int) (items []*models.Product, total int, err error)
+	SearchByFilter(ctx context.Context, categoryID, query string, filter *models.HorseFilter, locationFilter *models.LocationFilter, page, limit int) (items []*models.Product, total int, err error)
 	UpdateStatus(ctx context.Context, id string, status models.ProductStatus) error
 	Delete(ctx context.Context, id string) error
 	// Add Update method later as it's complex
@@ -49,9 +49,9 @@ func (r *ProductRepoPsql) Create(ctx context.Context, product *models.Product) (
 	// 1. Insert into products table
 	queryProd := `
 		INSERT INTO catalog.products (
-			id, user_id, category_id, type, status, title, price_sek, description, 
-			city, area, transaction_type, views_count
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 0)
+			id, user_id, category_id, type, status, title, price_sek, description,
+			city, area, transaction_type, views_count, latitude, longitude
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 0, $12, $13)
 		RETURNING id, created_at, updated_at
 	`
 
@@ -63,7 +63,7 @@ func (r *ProductRepoPsql) Create(ctx context.Context, product *models.Product) (
 	err = tx.QueryRowContext(ctx, queryProd,
 		productID, product.UserID, product.CategoryID, product.Type, product.Status,
 		product.Title, product.PriceSEK, product.Description, product.City,
-		product.Area, product.TransactionType,
+		product.Area, product.TransactionType, product.Latitude, product.Longitude,
 	).Scan(&product.ID, &product.CreatedAt, &product.UpdatedAt)
 
 	if err != nil {
@@ -125,8 +125,8 @@ func (r *ProductRepoPsql) insertSpecificData(ctx context.Context, tx *sql.Tx, p 
 // We limit SELECT * to specific aliases to avoid ambiguous columns
 var selectFullProduct = `
 	SELECT 
-		p.id, p.user_id, p.category_id, p.type, p.status, p.title, p.price_sek, p.description, 
-		p.city, p.area, p.transaction_type, p.views_count, p.created_at, p.updated_at,
+		p.id, p.user_id, p.category_id, p.type, p.status, p.title, p.price_sek, p.description,
+		p.city, p.area, p.latitude, p.longitude, p.transaction_type, p.views_count, p.created_at, p.updated_at,
 		h.name, h.age, h.year_of_birth, h.gender, h.height, h.breed, h.color, h.dressage_level, h.jump_level, h.orientation, h.pedigree,
 		v.make, v.model, v.year, v.load_weight, v.total_weight, v.condition,
 		e.make, e.model, e.size, e.condition, e.sub_type, e.boom_width
@@ -155,7 +155,7 @@ func (r *ProductRepoPsql) scanProduct(row interface{ Scan(...any) error }) (*mod
 
 	err := row.Scan(
 		&p.ID, &p.UserID, &p.CategoryID, &p.Type, &p.Status, &p.Title, &p.PriceSEK, &p.Description,
-		&p.City, &p.Area, &p.TransactionType, &p.ViewsCount, &p.CreatedAt, &p.UpdatedAt,
+		&p.City, &p.Area, &p.Latitude, &p.Longitude, &p.TransactionType, &p.ViewsCount, &p.CreatedAt, &p.UpdatedAt,
 		&hName, &hAge, &hYOB, &hGender, &hHeight, &hBreed, &hColor, &hDressage, &hJump, &hOrient, &hPedigree,
 		&vMake, &vModel, &vYear, &vLoad, &vTotal, &vCondition,
 		&eMake, &eModel, &eSize, &eCondition, &eSubType, &eBoom,
@@ -328,7 +328,7 @@ func (r *ProductRepoPsql) FindByField(ctx context.Context, fieldName string, val
 	return products, nil
 }
 
-func (r *ProductRepoPsql) SearchByFilter(ctx context.Context, categoryID, query string, filter *models.HorseFilter, page, limit int) ([]*models.Product, int, error) {
+func (r *ProductRepoPsql) SearchByFilter(ctx context.Context, categoryID, query string, filter *models.HorseFilter, locationFilter *models.LocationFilter, page, limit int) ([]*models.Product, int, error) {
 	offset := (page - 1) * limit
 
 	var conditions []string
@@ -374,6 +374,14 @@ func (r *ProductRepoPsql) SearchByFilter(ctx context.Context, categoryID, query 
 		if filter.MaxPrice != nil {
 			addCondition("p.price_sek <= $%d", *filter.MaxPrice)
 		}
+	}
+	if locationFilter != nil {
+		args = append(args, locationFilter.Lng, locationFilter.Lat, locationFilter.RadiusKm*1000)
+		n := len(args)
+		conditions = append(conditions, fmt.Sprintf(
+			"ST_DWithin(ST_SetSRID(ST_MakePoint(p.longitude, p.latitude), 4326)::geography, ST_SetSRID(ST_MakePoint($%d, $%d), 4326)::geography, $%d)",
+			n-2, n-1, n,
+		))
 	}
 
 	whereClause := ""

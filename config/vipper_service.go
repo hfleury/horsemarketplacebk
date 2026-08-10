@@ -44,6 +44,9 @@ func (vs *VipperService) LoadConfiguration() {
 	vs.Config.Storage.SecretAccessKey = viper.GetString("STORAGE_SECRET_ACCESS_KEY")
 	vs.Config.Storage.BucketName = viper.GetString("STORAGE_BUCKET_NAME")
 
+	// Mapbox geocoding
+	vs.Config.Mapbox.APIKey = viper.GetString("MAPBOX_API_KEY")
+
 	// Log loaded configuration for debugging
 	log.Printf("Loaded configuration: %+v", vs.Config)
 

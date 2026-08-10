@@ -23,7 +23,7 @@ func TestList_DefaultsPageAndLimit(t *testing.T) {
 	handler := newTestProductHandler(mockService)
 
 	result := &models.PaginatedProducts{Items: []*models.Product{}, Total: 0, Page: 1, Limit: 20}
-	mockService.On("Search", mock.Anything, "", "", map[string]string{}, (*models.HorseFilter)(nil), 1, 20).Return(result, nil)
+	mockService.On("Search", mock.Anything, "", "", map[string]string{}, (*models.HorseFilter)(nil), (*models.LocationFilter)(nil), 1, 20).Return(result, nil)
 
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
@@ -41,7 +41,7 @@ func TestList_LimitClampedTo100(t *testing.T) {
 	handler := newTestProductHandler(mockService)
 
 	result := &models.PaginatedProducts{Items: []*models.Product{}, Total: 0, Page: 1, Limit: 100}
-	mockService.On("Search", mock.Anything, "", "", map[string]string{}, (*models.HorseFilter)(nil), 1, 100).Return(result, nil)
+	mockService.On("Search", mock.Anything, "", "", map[string]string{}, (*models.HorseFilter)(nil), (*models.LocationFilter)(nil), 1, 100).Return(result, nil)
 
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
@@ -62,7 +62,7 @@ func TestList_InvalidPageFallsBackToOne(t *testing.T) {
 		handler := newTestProductHandler(mockService)
 
 		result := &models.PaginatedProducts{Items: []*models.Product{}, Total: 0, Page: 1, Limit: 20}
-		mockService.On("Search", mock.Anything, "", "", map[string]string{}, (*models.HorseFilter)(nil), 1, 20).Return(result, nil)
+		mockService.On("Search", mock.Anything, "", "", map[string]string{}, (*models.HorseFilter)(nil), (*models.LocationFilter)(nil), 1, 20).Return(result, nil)
 
 		w := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(w)
@@ -86,7 +86,7 @@ func TestList_SuccessReturnsPaginatedData(t *testing.T) {
 		Page:  1,
 		Limit: 20,
 	}
-	mockService.On("Search", mock.Anything, "", "", map[string]string{}, (*models.HorseFilter)(nil), 1, 20).Return(result, nil)
+	mockService.On("Search", mock.Anything, "", "", map[string]string{}, (*models.HorseFilter)(nil), (*models.LocationFilter)(nil), 1, 20).Return(result, nil)
 
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
@@ -98,4 +98,34 @@ func TestList_SuccessReturnsPaginatedData(t *testing.T) {
 	assert.Contains(t, w.Body.String(), "Test Horse")
 	assert.Contains(t, w.Body.String(), `"total":1`)
 	mockService.AssertExpectations(t)
+}
+
+func TestList_LocationFilter_MissingRadiusReturns400(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	mockService := new(mockProducts.MockProductService)
+	handler := newTestProductHandler(mockService)
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest("GET", "/api/v1/products?lat=59.3&lng=18.0", nil)
+
+	handler.List(c)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	mockService.AssertNotCalled(t, "Search")
+}
+
+func TestList_LocationFilter_RadiusOutOfRangeReturns400(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	mockService := new(mockProducts.MockProductService)
+	handler := newTestProductHandler(mockService)
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest("GET", "/api/v1/products?lat=59.3&lng=18.0&radius_km=1000", nil)
+
+	handler.List(c)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	mockService.AssertNotCalled(t, "Search")
 }

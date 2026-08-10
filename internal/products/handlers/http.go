@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"errors"
 	"net/http"
 	"strconv"
 
@@ -87,6 +88,12 @@ func (h *ProductHandler) List(c *gin.Context) {
 
 	horseFilter := parseHorseFilter(c)
 
+	locationFilter, err := parseLocationFilter(c)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, common.NewErrorResponse(err.Error()))
+		return
+	}
+
 	page, err := strconv.Atoi(c.Query("page"))
 	if err != nil || page < 1 {
 		page = 1
@@ -100,7 +107,7 @@ func (h *ProductHandler) List(c *gin.Context) {
 	}
 
 	// If no search params, FindAll called inside Search via service logic
-	products, err := h.service.Search(c.Request.Context(), query, categoryID, fieldMap, horseFilter, page, limit)
+	products, err := h.service.Search(c.Request.Context(), query, categoryID, fieldMap, horseFilter, locationFilter, page, limit)
 	if err != nil {
 		h.logger.Log(c.Request.Context(), config.ErrorLevel, "Failed to list products", map[string]any{"error": err.Error()})
 		c.JSON(http.StatusInternalServerError, common.NewErrorResponse("Failed to list products"))
@@ -155,6 +162,37 @@ func parseHorseFilter(c *gin.Context) *models.HorseFilter {
 		return nil
 	}
 	return &filter
+}
+
+func parseLocationFilter(c *gin.Context) (*models.LocationFilter, error) {
+	latStr := c.Query("lat")
+	lngStr := c.Query("lng")
+	radiusStr := c.Query("radius_km")
+
+	if latStr == "" && lngStr == "" && radiusStr == "" {
+		return nil, nil
+	}
+	if latStr == "" || lngStr == "" || radiusStr == "" {
+		return nil, errors.New("lat, lng, and radius_km must all be provided together")
+	}
+
+	lat, err := strconv.ParseFloat(latStr, 64)
+	if err != nil {
+		return nil, errors.New("lat must be a valid number")
+	}
+	lng, err := strconv.ParseFloat(lngStr, 64)
+	if err != nil {
+		return nil, errors.New("lng must be a valid number")
+	}
+	radiusKm, err := strconv.ParseFloat(radiusStr, 64)
+	if err != nil {
+		return nil, errors.New("radius_km must be a valid number")
+	}
+	if radiusKm < 10 || radiusKm > 500 {
+		return nil, errors.New("radius_km must be between 10 and 500")
+	}
+
+	return &models.LocationFilter{Lat: lat, Lng: lng, RadiusKm: radiusKm}, nil
 }
 
 func (h *ProductHandler) UpdateStatus(c *gin.Context) {
