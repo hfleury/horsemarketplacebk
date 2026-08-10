@@ -30,7 +30,7 @@ func NewHorseAttributeRepoPsql(psql db.Database, logger config.Logging) *HorseAt
 
 func (r *HorseAttributeRepoPsql) Create(ctx context.Context, option *models.HorseAttributeOption) (*models.HorseAttributeOption, error) {
 	query := `
-		INSERT INTO authentic.horse_attribute_options (id, type, value)
+		INSERT INTO catalog.horse_attribute_options (id, type, value)
 		VALUES ($1, $2, $3)
 		RETURNING id, type, value, created_at, updated_at
 	`
@@ -58,7 +58,7 @@ func (r *HorseAttributeRepoPsql) Create(ctx context.Context, option *models.Hors
 }
 
 func (r *HorseAttributeRepoPsql) Delete(ctx context.Context, id string) error {
-	query := `DELETE FROM authentic.horse_attribute_options WHERE id = $1`
+	query := `DELETE FROM catalog.horse_attribute_options WHERE id = $1`
 	result, err := r.psql.Execute(ctx, query, id)
 	if err != nil {
 		r.logger.Log(ctx, config.ErrorLevel, "Failed to delete horse attribute option", map[string]any{"error": err.Error()})
@@ -76,7 +76,7 @@ func (r *HorseAttributeRepoPsql) Delete(ctx context.Context, id string) error {
 func (r *HorseAttributeRepoPsql) FindAll(ctx context.Context, attrType string) ([]*models.HorseAttributeOption, error) {
 	query := `
 		SELECT id, type, value, created_at, updated_at
-		FROM authentic.horse_attribute_options
+		FROM catalog.horse_attribute_options
 	`
 	args := []any{}
 	if attrType != "" {

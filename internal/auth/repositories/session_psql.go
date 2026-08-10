@@ -23,7 +23,7 @@ func (s *SessionRepoPsql) Create(ctx context.Context, userID string, sessionToke
 	if err != nil {
 		return err
 	}
-	_, err = s.psql.Execute(ctx, `INSERT INTO authentic.user_sessions (user_id, session_token, is_active, last_activity, created_at, expires_at) VALUES ($1,$2,$3,$4,$5,$6)`, userID, sessionToken, true, time.Now().UTC(), time.Now().UTC(), t)
+	_, err = s.psql.Execute(ctx, `INSERT INTO auth.user_sessions (user_id, session_token, is_active, last_activity, created_at, expires_at) VALUES ($1,$2,$3,$4,$5,$6)`, userID, sessionToken, true, time.Now().UTC(), time.Now().UTC(), t)
 	return err
 }
 
@@ -31,7 +31,7 @@ func (s *SessionRepoPsql) Validate(ctx context.Context, sessionToken string) (st
 	var userID string
 	var isActive bool
 	var expiresAt time.Time
-	row := s.psql.QueryRow(ctx, `SELECT user_id, is_active, expires_at FROM authentic.user_sessions WHERE session_token = $1`, sessionToken)
+	row := s.psql.QueryRow(ctx, `SELECT user_id, is_active, expires_at FROM auth.user_sessions WHERE session_token = $1`, sessionToken)
 	err := row.Scan(&userID, &isActive, &expiresAt)
 	if err != nil {
 		return "", false, "", err
@@ -40,7 +40,7 @@ func (s *SessionRepoPsql) Validate(ctx context.Context, sessionToken string) (st
 }
 
 func (s *SessionRepoPsql) Revoke(ctx context.Context, sessionToken string) error {
-	_, err := s.psql.Execute(ctx, `UPDATE authentic.user_sessions SET is_active = false WHERE session_token = $1`, sessionToken)
+	_, err := s.psql.Execute(ctx, `UPDATE auth.user_sessions SET is_active = false WHERE session_token = $1`, sessionToken)
 	return err
 }
 
@@ -65,13 +65,13 @@ func (s *SessionRepoPsql) Rotate(ctx context.Context, userID string, oldToken st
 	}
 
 	// insert new session
-	if _, err = tx.ExecContext(ctx, `INSERT INTO authentic.user_sessions (user_id, session_token, is_active, last_activity, created_at, expires_at) VALUES ($1,$2,$3,$4,$5,$6)`, userID, newToken, true, time.Now().UTC(), time.Now().UTC(), t); err != nil {
+	if _, err = tx.ExecContext(ctx, `INSERT INTO auth.user_sessions (user_id, session_token, is_active, last_activity, created_at, expires_at) VALUES ($1,$2,$3,$4,$5,$6)`, userID, newToken, true, time.Now().UTC(), time.Now().UTC(), t); err != nil {
 		tx.Rollback()
 		return err
 	}
 
 	// revoke old session
-	if _, err = tx.ExecContext(ctx, `UPDATE authentic.user_sessions SET is_active = false WHERE session_token = $1`, oldToken); err != nil {
+	if _, err = tx.ExecContext(ctx, `UPDATE auth.user_sessions SET is_active = false WHERE session_token = $1`, oldToken); err != nil {
 		tx.Rollback()
 		return err
 	}
@@ -85,6 +85,6 @@ func (s *SessionRepoPsql) Rotate(ctx context.Context, userID string, oldToken st
 
 // RevokeAllForUser revokes all sessions for a given user
 func (s *SessionRepoPsql) RevokeAllForUser(ctx context.Context, userID string) error {
-	_, err := s.psql.Execute(ctx, `UPDATE authentic.user_sessions SET is_active = false WHERE user_id = $1`, userID)
+	_, err := s.psql.Execute(ctx, `UPDATE auth.user_sessions SET is_active = false WHERE user_id = $1`, userID)
 	return err
 }
