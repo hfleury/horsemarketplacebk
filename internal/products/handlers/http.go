@@ -85,6 +85,8 @@ func (h *ProductHandler) List(c *gin.Context) {
 		fieldMap["make"] = make
 	}
 
+	horseFilter := parseHorseFilter(c)
+
 	page, err := strconv.Atoi(c.Query("page"))
 	if err != nil || page < 1 {
 		page = 1
@@ -98,7 +100,7 @@ func (h *ProductHandler) List(c *gin.Context) {
 	}
 
 	// If no search params, FindAll called inside Search via service logic
-	products, err := h.service.Search(c.Request.Context(), query, categoryID, fieldMap, page, limit)
+	products, err := h.service.Search(c.Request.Context(), query, categoryID, fieldMap, horseFilter, page, limit)
 	if err != nil {
 		h.logger.Log(c.Request.Context(), config.ErrorLevel, "Failed to list products", map[string]any{"error": err.Error()})
 		c.JSON(http.StatusInternalServerError, common.NewErrorResponse("Failed to list products"))
@@ -106,6 +108,53 @@ func (h *ProductHandler) List(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, common.NewSuccessResponse(products))
+}
+
+func parseHorseFilter(c *gin.Context) *models.HorseFilter {
+	filter := models.HorseFilter{}
+	set := false
+
+	if breed := c.Query("breed"); breed != "" {
+		filter.Breed = &breed
+		set = true
+	}
+	if gender := c.Query("gender"); gender != "" {
+		filter.Gender = &gender
+		set = true
+	}
+	if discipline := c.Query("discipline"); discipline != "" {
+		filter.Discipline = &discipline
+		set = true
+	}
+	if v, err := strconv.Atoi(c.Query("min_age")); err == nil {
+		filter.MinAge = &v
+		set = true
+	}
+	if v, err := strconv.Atoi(c.Query("max_age")); err == nil {
+		filter.MaxAge = &v
+		set = true
+	}
+	if v, err := strconv.Atoi(c.Query("min_height")); err == nil {
+		filter.MinHeight = &v
+		set = true
+	}
+	if v, err := strconv.Atoi(c.Query("max_height")); err == nil {
+		filter.MaxHeight = &v
+		set = true
+	}
+	if v, err := strconv.ParseFloat(c.Query("min_price"), 64); err == nil {
+		filter.MinPrice = &v
+		set = true
+	}
+	if v, err := strconv.ParseFloat(c.Query("max_price"), 64); err == nil {
+		filter.MaxPrice = &v
+		set = true
+	}
+
+	if !set {
+		return nil
+	}
+	return &filter
 }
 
 func (h *ProductHandler) UpdateStatus(c *gin.Context) {

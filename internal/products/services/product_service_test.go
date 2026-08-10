@@ -128,9 +128,10 @@ func TestSearch_ByCategory_Paginated(t *testing.T) {
 	categoryID := uuid.New().String()
 	items := []*models.Product{{Title: "Horse 1"}, {Title: "Horse 2"}}
 
-	mockRepo.On("FindByCategory", mock.Anything, categoryID, 2, 10).Return(items, 25, nil)
+	// categoryID/query-only search now goes through the unified SearchByFilter path.
+	mockRepo.On("SearchByFilter", mock.Anything, categoryID, "", (*models.HorseFilter)(nil), 2, 10).Return(items, 25, nil)
 
-	result, err := service.Search(context.Background(), "", categoryID, nil, 2, 10)
+	result, err := service.Search(context.Background(), "", categoryID, nil, nil, 2, 10)
 
 	assert.NoError(t, err)
 	assert.Equal(t, items, result.Items)
@@ -140,7 +141,7 @@ func TestSearch_ByCategory_Paginated(t *testing.T) {
 	mockRepo.AssertExpectations(t)
 }
 
-func TestSearch_FallbackFindAll_Paginated(t *testing.T) {
+func TestSearch_NoFilters_Paginated(t *testing.T) {
 	mockRepo := new(mockProducts.MockProductRepo)
 	mockSettings := new(mockSystem.MockSettingsRepo)
 	logger := config.NewZerologService()
@@ -149,9 +150,9 @@ func TestSearch_FallbackFindAll_Paginated(t *testing.T) {
 
 	items := []*models.Product{{Title: "Item 1"}}
 
-	mockRepo.On("FindAll", mock.Anything, mock.Anything, 1, 20).Return(items, 1, nil)
+	mockRepo.On("SearchByFilter", mock.Anything, "", "", (*models.HorseFilter)(nil), 1, 20).Return(items, 1, nil)
 
-	result, err := service.Search(context.Background(), "", "", nil, 1, 20)
+	result, err := service.Search(context.Background(), "", "", nil, nil, 1, 20)
 
 	assert.NoError(t, err)
 	assert.Equal(t, items, result.Items)
@@ -161,7 +162,7 @@ func TestSearch_FallbackFindAll_Paginated(t *testing.T) {
 	mockRepo.AssertExpectations(t)
 }
 
-func TestSearch_ByQuery_ReturnsUnpaginatedWrap(t *testing.T) {
+func TestSearch_ByQuery_Paginated(t *testing.T) {
 	mockRepo := new(mockProducts.MockProductRepo)
 	mockSettings := new(mockSystem.MockSettingsRepo)
 	logger := config.NewZerologService()
@@ -170,13 +171,16 @@ func TestSearch_ByQuery_ReturnsUnpaginatedWrap(t *testing.T) {
 
 	items := []*models.Product{{Title: "A"}, {Title: "B"}, {Title: "C"}}
 
-	mockRepo.On("FindByTextInDescription", mock.Anything, "saddle").Return(items, nil)
+	// Intentional behavior change from the pre-HM-25 unpaginated query-only wrap:
+	// query-only search now shares the paginated SearchByFilter path with every
+	// other filter combination (see plan Risks/rollback).
+	mockRepo.On("SearchByFilter", mock.Anything, "", "saddle", (*models.HorseFilter)(nil), 1, 20).Return(items, 3, nil)
 
-	result, err := service.Search(context.Background(), "saddle", "", nil, 1, 20)
+	result, err := service.Search(context.Background(), "saddle", "", nil, nil, 1, 20)
 
 	assert.NoError(t, err)
 	assert.Equal(t, items, result.Items)
-	assert.Equal(t, len(items), result.Total)
+	assert.Equal(t, 3, result.Total)
 	assert.Equal(t, 1, result.Page)
 	mockRepo.AssertExpectations(t)
 }
@@ -193,11 +197,40 @@ func TestSearch_ByFieldMap_ReturnsUnpaginatedWrap(t *testing.T) {
 
 	mockRepo.On("FindByField", mock.Anything, "make", "Volvo").Return(items, nil)
 
-	result, err := service.Search(context.Background(), "", "", fieldMap, 1, 20)
+	result, err := service.Search(context.Background(), "", "", fieldMap, nil, 1, 20)
 
 	assert.NoError(t, err)
 	assert.Equal(t, items, result.Items)
 	assert.Equal(t, len(items), result.Total)
 	assert.Equal(t, 1, result.Page)
+	mockRepo.AssertExpectations(t)
+}
+
+func TestSearch_ByHorseFilter_CombinesFieldsAndPaginates(t *testing.T) {
+	mockRepo := new(mockProducts.MockProductRepo)
+	mockSettings := new(mockSystem.MockSettingsRepo)
+	logger := config.NewZerologService()
+
+	service := services.NewProductService(mockRepo, mockSettings, logger)
+
+	items := []*models.Product{{Title: "Warmblood"}}
+	breed := "Warmblood"
+	minPrice := 10000.0
+	maxPrice := 50000.0
+	horseFilter := &models.HorseFilter{
+		Breed:    &breed,
+		MinPrice: &minPrice,
+		MaxPrice: &maxPrice,
+	}
+
+	mockRepo.On("SearchByFilter", mock.Anything, "", "", horseFilter, 1, 20).Return(items, 1, nil)
+
+	result, err := service.Search(context.Background(), "", "", nil, horseFilter, 1, 20)
+
+	assert.NoError(t, err)
+	assert.Equal(t, items, result.Items)
+	assert.Equal(t, 1, result.Total)
+	assert.Equal(t, 1, result.Page)
+	assert.Equal(t, 20, result.Limit)
 	mockRepo.AssertExpectations(t)
 }
