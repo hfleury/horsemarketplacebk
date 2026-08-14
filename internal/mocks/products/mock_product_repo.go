@@ -59,6 +59,14 @@ func (m *MockProductRepo) SearchByFilter(ctx context.Context, categoryID, query 
 	return args.Get(0).([]*models.Product), args.Int(1), args.Error(2)
 }
 
+func (m *MockProductRepo) FindMediaByProductID(ctx context.Context, productID string) ([]models.ProductMedia, error) {
+	args := m.Called(ctx, productID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]models.ProductMedia), args.Error(1)
+}
+
 func (m *MockProductRepo) UpdateStatus(ctx context.Context, id string, status models.ProductStatus) error {
 	args := m.Called(ctx, id, status)
 	return args.Error(0)

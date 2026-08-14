@@ -7,10 +7,13 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/hfleury/horsemarketplacebk/config"
+	categoriesmodels "github.com/hfleury/horsemarketplacebk/internal/categories/models"
 	"github.com/hfleury/horsemarketplacebk/internal/db"
+	media "github.com/hfleury/horsemarketplacebk/internal/media"
 	"github.com/hfleury/horsemarketplacebk/internal/products/models"
 )
 
@@ -21,6 +24,7 @@ type ProductRepository interface {
 	FindByCategory(ctx context.Context, categoryID string, page, limit int) (items []*models.Product, total int, err error)
 	FindByField(ctx context.Context, fieldName string, value string) ([]*models.Product, error)
 	SearchByFilter(ctx context.Context, categoryID, query string, filter *models.HorseFilter, locationFilter *models.LocationFilter, page, limit int) (items []*models.Product, total int, err error)
+	FindMediaByProductID(ctx context.Context, productID string) ([]models.ProductMedia, error)
 	UpdateStatus(ctx context.Context, id string, status models.ProductStatus) error
 	Delete(ctx context.Context, id string) error
 	// Add Update method later as it's complex
@@ -123,19 +127,25 @@ func (r *ProductRepoPsql) insertSpecificData(ctx context.Context, tx *sql.Tx, p 
 // Base query to fetch all fields including joined specific tables
 // We limit SELECT * to specific aliases to avoid ambiguous columns
 var selectFullProduct = `
-	SELECT 
+	SELECT
 		p.id, p.user_id, p.category_id, p.type, p.status, p.title, p.price_sek, p.description,
 		p.city, p.area, p.latitude, p.longitude, p.transaction_type, p.views_count, p.created_at, p.updated_at,
 		h.name, h.age, h.year_of_birth, h.gender, h.height, h.breed, h.color, h.dressage_level, h.jump_level, h.orientation, h.pedigree,
 		v.make, v.model, v.year, v.load_weight, v.total_weight, v.condition,
-		e.make, e.model, e.size, e.condition, e.sub_type, e.boom_width
+		e.make, e.model, e.size, e.condition, e.sub_type, e.boom_width,
+		c.id, c.name, c.picture_url, c.parent_id, c.created_at, c.updated_at,
+		s.service_type, s.availability,
+		pp.size_m2, pp.room_count, pp.has_stable
 	FROM catalog.products p
 	LEFT JOIN catalog.product_horses h ON p.id = h.product_id
 	LEFT JOIN catalog.product_vehicles v ON p.id = v.product_id
 	LEFT JOIN catalog.product_equipment e ON p.id = e.product_id
+	LEFT JOIN catalog.categories c ON p.category_id = c.id
+	LEFT JOIN catalog.product_services s ON p.id = s.product_id
+	LEFT JOIN catalog.product_properties pp ON p.id = pp.product_id
 `
 
-func (r *ProductRepoPsql) scanProduct(row interface{ Scan(...any) error }) (*models.Product, error) {
+func (r *ProductRepoPsql) scanProduct(ctx context.Context, row interface{ Scan(...any) error }) (*models.Product, error) {
 	var p models.Product
 	// Pointers for specific fields that might be null
 	var (
@@ -150,6 +160,18 @@ func (r *ProductRepoPsql) scanProduct(row interface{ Scan(...any) error }) (*mod
 
 		// Equipment
 		eMake, eModel, eSize, eCondition, eSubType, eBoom *string
+
+		// Category
+		catID, catParentID                             *uuid.UUID
+		catName, catPictureURL                          *string
+		catCreatedAt, catUpdatedAt                      *time.Time
+
+		// Service
+		svcType, svcAvailability *string
+
+		// Property
+		propSizeM2, propRoomCount *int
+		propHasStable             *bool
 	)
 
 	err := row.Scan(
@@ -158,9 +180,19 @@ func (r *ProductRepoPsql) scanProduct(row interface{ Scan(...any) error }) (*mod
 		&hName, &hAge, &hYOB, &hGender, &hHeight, &hBreed, &hColor, &hDressage, &hJump, &hOrient, &hPedigree,
 		&vMake, &vModel, &vYear, &vLoad, &vTotal, &vCondition,
 		&eMake, &eModel, &eSize, &eCondition, &eSubType, &eBoom,
+		&catID, &catName, &catPictureURL, &catParentID, &catCreatedAt, &catUpdatedAt,
+		&svcType, &svcAvailability,
+		&propSizeM2, &propRoomCount, &propHasStable,
 	)
 	if err != nil {
 		return nil, err
+	}
+
+	if catID != nil {
+		p.Category = &categoriesmodels.Category{
+			Id: catID, Name: catName, PictureURL: catPictureURL, ParentID: catParentID,
+			CreatedAt: catCreatedAt, UpdatedAt: catUpdatedAt,
+		}
 	}
 
 	// Populate specific structs based on Type
@@ -183,15 +215,60 @@ func (r *ProductRepoPsql) scanProduct(row interface{ Scan(...any) error }) (*mod
 			ProductID: p.ID, Make: eMake, Model: eModel, Size: eSize, Condition: eCondition,
 			SubType: eSubType, BoomWidth: eBoom,
 		}
+	case models.TypeService:
+		p.Service = &models.Service{
+			ProductID: p.ID, ServiceType: svcType, Availability: svcAvailability,
+		}
+	case models.TypeProperty:
+		p.Property = &models.Property{
+			ProductID: p.ID, SizeM2: propSizeM2, RoomCount: propRoomCount, HasStable: propHasStable,
+		}
 	}
 
+	productMedia, err := r.FindMediaByProductID(ctx, p.ID.String())
+	if err != nil {
+		return nil, err
+	}
+	p.Media = productMedia
+
 	return &p, nil
+}
+
+func (r *ProductRepoPsql) FindMediaByProductID(ctx context.Context, productID string) ([]models.ProductMedia, error) {
+	query := `
+		SELECT pm.product_id, pm.media_id, pm."order", pm.is_primary,
+		       m.id, m.file_name, m.original_name, m.mime_type, m.size_bytes, m.url, m.bucket_name, m.region, m.created_at, m.updated_at
+		FROM catalog.product_media pm
+		JOIN media.media m ON m.id = pm.media_id
+		WHERE pm.product_id = $1
+		ORDER BY pm."order" ASC
+	`
+	rows, err := r.psql.Query(ctx, query, productID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var mediaItems []models.ProductMedia
+	for rows.Next() {
+		var pm models.ProductMedia
+		var m media.Media
+		if err := rows.Scan(
+			&pm.ProductID, &pm.MediaID, &pm.Order, &pm.IsPrimary,
+			&m.ID, &m.FileName, &m.OriginalName, &m.MimeType, &m.SizeBytes, &m.URL, &m.BucketName, &m.Region, &m.CreatedAt, &m.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		pm.Media = &m
+		mediaItems = append(mediaItems, pm)
+	}
+	return mediaItems, nil
 }
 
 func (r *ProductRepoPsql) FindByID(ctx context.Context, id string) (*models.Product, error) {
 	query := selectFullProduct + ` WHERE p.id = $1`
 	row := r.psql.QueryRow(ctx, query, id)
-	p, err := r.scanProduct(row)
+	p, err := r.scanProduct(ctx, row)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, nil
@@ -219,7 +296,7 @@ func (r *ProductRepoPsql) FindAll(ctx context.Context, filters map[string]any, p
 
 	var products []*models.Product
 	for rows.Next() {
-		p, err := r.scanProduct(rows)
+		p, err := r.scanProduct(ctx, rows)
 		if err != nil {
 			continue // Log error?
 		}
@@ -245,7 +322,7 @@ func (r *ProductRepoPsql) FindByCategory(ctx context.Context, categoryID string,
 
 	var products []*models.Product
 	for rows.Next() {
-		p, err := r.scanProduct(rows)
+		p, err := r.scanProduct(ctx, rows)
 		if err != nil {
 			continue
 		}
@@ -297,7 +374,7 @@ func (r *ProductRepoPsql) FindByField(ctx context.Context, fieldName string, val
 
 	var products []*models.Product
 	for rows.Next() {
-		p, err := r.scanProduct(rows)
+		p, err := r.scanProduct(ctx, rows)
 		if err != nil {
 			continue
 		}
@@ -385,7 +462,7 @@ func (r *ProductRepoPsql) SearchByFilter(ctx context.Context, categoryID, query 
 
 	var products []*models.Product
 	for rows.Next() {
-		p, err := r.scanProduct(rows)
+		p, err := r.scanProduct(ctx, rows)
 		if err != nil {
 			continue
 		}

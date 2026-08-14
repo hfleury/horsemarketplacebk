@@ -52,6 +52,8 @@ type Product struct {
 	Horse     *Horse     `json:"horse,omitempty"`
 	Vehicle   *Vehicle   `json:"vehicle,omitempty"`
 	Equipment *Equipment `json:"equipment,omitempty"`
+	Service   *Service   `json:"service,omitempty"`
+	Property  *Property  `json:"property,omitempty"`
 }
 
 type ProductMedia struct {
