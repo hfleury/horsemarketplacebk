@@ -19,7 +19,6 @@ type ProductRepository interface {
 	FindByID(ctx context.Context, id string) (*models.Product, error)
 	FindAll(ctx context.Context, filters map[string]any, page, limit int) (items []*models.Product, total int, err error)
 	FindByCategory(ctx context.Context, categoryID string, page, limit int) (items []*models.Product, total int, err error)
-	FindByTextInDescription(ctx context.Context, text string) ([]*models.Product, error)
 	FindByField(ctx context.Context, fieldName string, value string) ([]*models.Product, error)
 	SearchByFilter(ctx context.Context, categoryID, query string, filter *models.HorseFilter, locationFilter *models.LocationFilter, page, limit int) (items []*models.Product, total int, err error)
 	UpdateStatus(ctx context.Context, id string, status models.ProductStatus) error
@@ -253,27 +252,6 @@ func (r *ProductRepoPsql) FindByCategory(ctx context.Context, categoryID string,
 		products = append(products, p)
 	}
 	return products, total, nil
-}
-
-func (r *ProductRepoPsql) FindByTextInDescription(ctx context.Context, text string) ([]*models.Product, error) {
-	// Simple ILIKE search. For larger scale, use Full Text Search (tsvector).
-	query := selectFullProduct + ` WHERE p.description ILIKE $1 OR p.title ILIKE $1 ORDER BY p.created_at DESC`
-	searchTerm := "%" + text + "%"
-	rows, err := r.psql.Query(ctx, query, searchTerm)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var products []*models.Product
-	for rows.Next() {
-		p, err := r.scanProduct(rows)
-		if err != nil {
-			continue
-		}
-		products = append(products, p)
-	}
-	return products, nil
 }
 
 func (r *ProductRepoPsql) FindByField(ctx context.Context, fieldName string, value string) ([]*models.Product, error) {
