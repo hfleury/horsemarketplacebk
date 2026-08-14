@@ -40,3 +40,16 @@ type Equipment struct {
 	SubType   *string   `json:"sub_type"`
 	BoomWidth *string   `json:"boom_width"`
 }
+
+type Service struct {
+	ProductID    uuid.UUID `json:"product_id"`
+	ServiceType  *string   `json:"service_type"`
+	Availability *string   `json:"availability"`
+}
+
+type Property struct {
+	ProductID uuid.UUID `json:"product_id"`
+	SizeM2    *int      `json:"size_m2"`
+	RoomCount *int      `json:"room_count"`
+	HasStable *bool     `json:"has_stable"`
+}

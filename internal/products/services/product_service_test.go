@@ -6,6 +6,8 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/hfleury/horsemarketplacebk/config"
+	categoriesmodels "github.com/hfleury/horsemarketplacebk/internal/categories/models"
+	media "github.com/hfleury/horsemarketplacebk/internal/media"
 	mockGeocoding "github.com/hfleury/horsemarketplacebk/internal/mocks/geocoding"
 	mockProducts "github.com/hfleury/horsemarketplacebk/internal/mocks/products"
 	mockSystem "github.com/hfleury/horsemarketplacebk/internal/mocks/system"
@@ -117,6 +119,46 @@ func TestUpdateStatus_Unauthorized(t *testing.T) {
 	err := service.UpdateStatus(context.Background(), productID.String(), models.StatusDeleted, otherUserID.String(), false)
 
 	assert.Equal(t, services.ErrUnauthorized, err)
+}
+
+func TestFindByID_PassesThroughRepoResult(t *testing.T) {
+	mockRepo := new(mockProducts.MockProductRepo)
+	mockSettings := new(mockSystem.MockSettingsRepo)
+	logger := config.NewZerologService()
+
+	service := services.NewProductService(mockRepo, mockSettings, logger, new(mockGeocoding.MockGeocodingClient))
+
+	productID := uuid.New()
+	catID := uuid.New()
+	catName := "Horses"
+	serviceType := "boarding"
+	sizeM2 := 120
+	fullyPopulated := &models.Product{
+		ID:    productID,
+		Title: "Fully Populated Product",
+		Type:  models.TypeHorse,
+		Category: &categoriesmodels.Category{
+			Id:   &catID,
+			Name: &catName,
+		},
+		Media: []models.ProductMedia{
+			{ProductID: productID, MediaID: uuid.New(), Order: 0, IsPrimary: true, Media: &media.Media{URL: "https://example.com/img.jpg"}},
+		},
+		Service:  &models.Service{ProductID: productID, ServiceType: &serviceType},
+		Property: &models.Property{ProductID: productID, SizeM2: &sizeM2},
+	}
+
+	mockRepo.On("FindByID", mock.Anything, productID.String()).Return(fullyPopulated, nil)
+
+	result, err := service.FindByID(context.Background(), productID.String())
+
+	assert.NoError(t, err)
+	assert.Same(t, fullyPopulated, result)
+	assert.Equal(t, fullyPopulated.Category, result.Category)
+	assert.Equal(t, fullyPopulated.Media, result.Media)
+	assert.Equal(t, fullyPopulated.Service, result.Service)
+	assert.Equal(t, fullyPopulated.Property, result.Property)
+	mockRepo.AssertExpectations(t)
 }
 
 func TestSearch_ByCategory_Paginated(t *testing.T) {
