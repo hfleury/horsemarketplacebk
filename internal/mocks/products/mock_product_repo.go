@@ -43,14 +43,6 @@ func (m *MockProductRepo) FindByCategory(ctx context.Context, categoryID string,
 	return args.Get(0).([]*models.Product), args.Int(1), args.Error(2)
 }
 
-func (m *MockProductRepo) FindByTextInDescription(ctx context.Context, text string) ([]*models.Product, error) {
-	args := m.Called(ctx, text)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).([]*models.Product), args.Error(1)
-}
-
 func (m *MockProductRepo) FindByField(ctx context.Context, fieldName string, value string) ([]*models.Product, error) {
 	args := m.Called(ctx, fieldName, value)
 	if args.Get(0) == nil {
