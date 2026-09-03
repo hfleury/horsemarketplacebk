@@ -26,6 +26,7 @@ type ProductRepository interface {
 	SearchByFilter(ctx context.Context, categoryID, query string, filter *models.HorseFilter, locationFilter *models.LocationFilter, page, limit int) (items []*models.Product, total int, err error)
 	FindMediaByProductID(ctx context.Context, productID string) ([]models.ProductMedia, error)
 	UpdateStatus(ctx context.Context, id string, status models.ProductStatus) error
+	IncrementViewCount(ctx context.Context, id string) error
 	Delete(ctx context.Context, id string) error
 	// Add Update method later as it's complex
 }
@@ -474,6 +475,12 @@ func (r *ProductRepoPsql) SearchByFilter(ctx context.Context, categoryID, query 
 func (r *ProductRepoPsql) UpdateStatus(ctx context.Context, id string, status models.ProductStatus) error {
 	query := `UPDATE catalog.products SET status = $1, updated_at = NOW() WHERE id = $2`
 	_, err := r.psql.Execute(ctx, query, status, id)
+	return err
+}
+
+func (r *ProductRepoPsql) IncrementViewCount(ctx context.Context, id string) error {
+	query := `UPDATE catalog.products SET views_count = views_count + 1 WHERE id = $1`
+	_, err := r.psql.Execute(ctx, query, id)
 	return err
 }
 

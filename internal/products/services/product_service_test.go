@@ -2,6 +2,7 @@ package services_test
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/google/uuid"
@@ -149,6 +150,7 @@ func TestFindByID_PassesThroughRepoResult(t *testing.T) {
 	}
 
 	mockRepo.On("FindByID", mock.Anything, productID.String()).Return(fullyPopulated, nil)
+	mockRepo.On("IncrementViewCount", mock.Anything, productID.String()).Return(nil)
 
 	result, err := service.FindByID(context.Background(), productID.String())
 
@@ -159,6 +161,44 @@ func TestFindByID_PassesThroughRepoResult(t *testing.T) {
 	assert.Equal(t, fullyPopulated.Service, result.Service)
 	assert.Equal(t, fullyPopulated.Property, result.Property)
 	mockRepo.AssertExpectations(t)
+}
+
+func TestFindByID_IncrementViewCountFailure_DoesNotFailRequest(t *testing.T) {
+	mockRepo := new(mockProducts.MockProductRepo)
+	mockSettings := new(mockSystem.MockSettingsRepo)
+	logger := config.NewZerologService()
+
+	service := services.NewProductService(mockRepo, mockSettings, logger, new(mockGeocoding.MockGeocodingClient))
+
+	productID := uuid.New()
+	product := &models.Product{ID: productID, Title: "Test Product"}
+
+	mockRepo.On("FindByID", mock.Anything, productID.String()).Return(product, nil)
+	mockRepo.On("IncrementViewCount", mock.Anything, productID.String()).Return(errors.New("db error"))
+
+	result, err := service.FindByID(context.Background(), productID.String())
+
+	assert.NoError(t, err)
+	assert.Same(t, product, result)
+	mockRepo.AssertExpectations(t)
+}
+
+func TestFindByID_NotFound_DoesNotIncrementViewCount(t *testing.T) {
+	mockRepo := new(mockProducts.MockProductRepo)
+	mockSettings := new(mockSystem.MockSettingsRepo)
+	logger := config.NewZerologService()
+
+	service := services.NewProductService(mockRepo, mockSettings, logger, new(mockGeocoding.MockGeocodingClient))
+
+	productID := uuid.New()
+
+	mockRepo.On("FindByID", mock.Anything, productID.String()).Return(nil, nil)
+
+	result, err := service.FindByID(context.Background(), productID.String())
+
+	assert.NoError(t, err)
+	assert.Nil(t, result)
+	mockRepo.AssertNotCalled(t, "IncrementViewCount", mock.Anything, mock.Anything)
 }
 
 func TestSearch_ByCategory_Paginated(t *testing.T) {
