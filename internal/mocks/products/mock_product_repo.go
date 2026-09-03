@@ -72,6 +72,11 @@ func (m *MockProductRepo) UpdateStatus(ctx context.Context, id string, status mo
 	return args.Error(0)
 }
 
+func (m *MockProductRepo) IncrementViewCount(ctx context.Context, id string) error {
+	args := m.Called(ctx, id)
+	return args.Error(0)
+}
+
 func (m *MockProductRepo) Delete(ctx context.Context, id string) error {
 	args := m.Called(ctx, id)
 	return args.Error(0)

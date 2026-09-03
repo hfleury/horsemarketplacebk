@@ -94,7 +94,22 @@ func (s *ProductServiceImp) geocodeProductLocation(ctx context.Context, product 
 }
 
 func (s *ProductServiceImp) FindByID(ctx context.Context, id string) (*models.Product, error) {
-	return s.repo.FindByID(ctx, id)
+	product, err := s.repo.FindByID(ctx, id)
+	if err != nil || product == nil {
+		return product, err
+	}
+
+	s.incrementViewCount(ctx, id)
+
+	return product, nil
+}
+
+// incrementViewCount is a best-effort side effect of viewing a product.
+// Failures are logged and swallowed — a successful fetch must never fail because the counter write did.
+func (s *ProductServiceImp) incrementViewCount(ctx context.Context, id string) {
+	if err := s.repo.IncrementViewCount(ctx, id); err != nil {
+		s.logger.Log(ctx, config.WarnLevel, "Failed to increment product view count", map[string]any{"error": err.Error(), "productId": id})
+	}
 }
 
 func (s *ProductServiceImp) FindAll(ctx context.Context, filters map[string]any, page, limit int) (*models.PaginatedProducts, error) {
