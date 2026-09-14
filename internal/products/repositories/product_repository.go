@@ -25,6 +25,7 @@ type ProductRepository interface {
 	FindByField(ctx context.Context, fieldName string, value string) ([]*models.Product, error)
 	SearchByFilter(ctx context.Context, categoryID, query string, filter *models.HorseFilter, locationFilter *models.LocationFilter, page, limit int) (items []*models.Product, total int, err error)
 	FindMediaByProductID(ctx context.Context, productID string) ([]models.ProductMedia, error)
+	CountFavoritesByProductID(ctx context.Context, productID string) (int, error)
 	UpdateStatus(ctx context.Context, id string, status models.ProductStatus) error
 	IncrementViewCount(ctx context.Context, id string) error
 	Delete(ctx context.Context, id string) error
@@ -163,9 +164,9 @@ func (r *ProductRepoPsql) scanProduct(ctx context.Context, row interface{ Scan(.
 		eMake, eModel, eSize, eCondition, eSubType, eBoom *string
 
 		// Category
-		catID, catParentID                             *uuid.UUID
-		catName, catPictureURL                          *string
-		catCreatedAt, catUpdatedAt                      *time.Time
+		catID, catParentID         *uuid.UUID
+		catName, catPictureURL     *string
+		catCreatedAt, catUpdatedAt *time.Time
 
 		// Service
 		svcType, svcAvailability *string
@@ -232,6 +233,12 @@ func (r *ProductRepoPsql) scanProduct(ctx context.Context, row interface{ Scan(.
 	}
 	p.Media = productMedia
 
+	favoriteCount, err := r.CountFavoritesByProductID(ctx, p.ID.String())
+	if err != nil {
+		return nil, err
+	}
+	p.FavoriteCount = favoriteCount
+
 	return &p, nil
 }
 
@@ -264,6 +271,15 @@ func (r *ProductRepoPsql) FindMediaByProductID(ctx context.Context, productID st
 		mediaItems = append(mediaItems, pm)
 	}
 	return mediaItems, nil
+}
+
+func (r *ProductRepoPsql) CountFavoritesByProductID(ctx context.Context, productID string) (int, error) {
+	query := `SELECT COUNT(*) FROM catalog.favorites WHERE product_id = $1`
+	var count int
+	if err := r.psql.QueryRow(ctx, query, productID).Scan(&count); err != nil {
+		return 0, err
+	}
+	return count, nil
 }
 
 func (r *ProductRepoPsql) FindByID(ctx context.Context, id string) (*models.Product, error) {
