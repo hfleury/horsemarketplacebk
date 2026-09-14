@@ -67,6 +67,11 @@ func (m *MockProductRepo) FindMediaByProductID(ctx context.Context, productID st
 	return args.Get(0).([]models.ProductMedia), args.Error(1)
 }
 
+func (m *MockProductRepo) CountFavoritesByProductID(ctx context.Context, productID string) (int, error) {
+	args := m.Called(ctx, productID)
+	return args.Int(0), args.Error(1)
+}
+
 func (m *MockProductRepo) UpdateStatus(ctx context.Context, id string, status models.ProductStatus) error {
 	args := m.Called(ctx, id, status)
 	return args.Error(0)

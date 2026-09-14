@@ -41,6 +41,7 @@ type Product struct {
 	Longitude       *float64      `json:"longitude"`
 	TransactionType *string       `json:"transaction_type"`
 	ViewsCount      int           `json:"views_count"`
+	FavoriteCount   int           `json:"favorite_count"`
 	CreatedAt       time.Time     `json:"created_at"`
 	UpdatedAt       time.Time     `json:"updated_at"`
 

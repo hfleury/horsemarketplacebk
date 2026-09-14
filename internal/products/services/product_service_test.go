@@ -145,8 +145,9 @@ func TestFindByID_PassesThroughRepoResult(t *testing.T) {
 		Media: []models.ProductMedia{
 			{ProductID: productID, MediaID: uuid.New(), Order: 0, IsPrimary: true, Media: &media.Media{URL: "https://example.com/img.jpg"}},
 		},
-		Service:  &models.Service{ProductID: productID, ServiceType: &serviceType},
-		Property: &models.Property{ProductID: productID, SizeM2: &sizeM2},
+		Service:       &models.Service{ProductID: productID, ServiceType: &serviceType},
+		Property:      &models.Property{ProductID: productID, SizeM2: &sizeM2},
+		FavoriteCount: 3,
 	}
 
 	mockRepo.On("FindByID", mock.Anything, productID.String()).Return(fullyPopulated, nil)
@@ -160,6 +161,7 @@ func TestFindByID_PassesThroughRepoResult(t *testing.T) {
 	assert.Equal(t, fullyPopulated.Media, result.Media)
 	assert.Equal(t, fullyPopulated.Service, result.Service)
 	assert.Equal(t, fullyPopulated.Property, result.Property)
+	assert.Equal(t, fullyPopulated.FavoriteCount, result.FavoriteCount)
 	mockRepo.AssertExpectations(t)
 }
 
