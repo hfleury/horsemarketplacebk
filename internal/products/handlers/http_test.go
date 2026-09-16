@@ -225,3 +225,101 @@ func TestList_LocationFilter_RadiusOutOfRangeReturns400(t *testing.T) {
 	assert.Equal(t, http.StatusBadRequest, w.Code)
 	mockService.AssertNotCalled(t, "Search")
 }
+
+func TestGetSimilar_DefaultsLimitTo6(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	mockService := new(mockProducts.MockProductService)
+	handler := newTestProductHandler(mockService)
+
+	productID := uuid.New()
+	products := []*models.Product{{Title: "Similar Horse"}}
+	mockService.On("FindSimilar", mock.Anything, productID.String(), 6).Return(products, nil)
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Params = gin.Params{{Key: "id", Value: productID.String()}}
+	c.Request = httptest.NewRequest("GET", "/api/v1/products/"+productID.String()+"/similar", nil)
+
+	handler.GetSimilar(c)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	mockService.AssertExpectations(t)
+}
+
+func TestGetSimilar_CustomLimit(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	mockService := new(mockProducts.MockProductService)
+	handler := newTestProductHandler(mockService)
+
+	productID := uuid.New()
+	products := []*models.Product{}
+	mockService.On("FindSimilar", mock.Anything, productID.String(), 3).Return(products, nil)
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Params = gin.Params{{Key: "id", Value: productID.String()}}
+	c.Request = httptest.NewRequest("GET", "/api/v1/products/"+productID.String()+"/similar?limit=3", nil)
+
+	handler.GetSimilar(c)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	mockService.AssertExpectations(t)
+}
+
+func TestGetSimilar_LimitClampedTo20(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	mockService := new(mockProducts.MockProductService)
+	handler := newTestProductHandler(mockService)
+
+	productID := uuid.New()
+	products := []*models.Product{}
+	mockService.On("FindSimilar", mock.Anything, productID.String(), 20).Return(products, nil)
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Params = gin.Params{{Key: "id", Value: productID.String()}}
+	c.Request = httptest.NewRequest("GET", "/api/v1/products/"+productID.String()+"/similar?limit=50", nil)
+
+	handler.GetSimilar(c)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	mockService.AssertExpectations(t)
+}
+
+func TestGetSimilar_NotFound(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	mockService := new(mockProducts.MockProductService)
+	handler := newTestProductHandler(mockService)
+
+	productID := uuid.New()
+	mockService.On("FindSimilar", mock.Anything, productID.String(), 6).Return(nil, nil)
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Params = gin.Params{{Key: "id", Value: productID.String()}}
+	c.Request = httptest.NewRequest("GET", "/api/v1/products/"+productID.String()+"/similar", nil)
+
+	handler.GetSimilar(c)
+
+	assert.Equal(t, http.StatusNotFound, w.Code)
+	mockService.AssertExpectations(t)
+}
+
+func TestGetSimilar_ServiceError(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	mockService := new(mockProducts.MockProductService)
+	handler := newTestProductHandler(mockService)
+
+	productID := uuid.New()
+	mockService.On("FindSimilar", mock.Anything, productID.String(), 6).Return(nil, errors.New("db error"))
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Params = gin.Params{{Key: "id", Value: productID.String()}}
+	c.Request = httptest.NewRequest("GET", "/api/v1/products/"+productID.String()+"/similar", nil)
+
+	handler.GetSimilar(c)
+
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+	mockService.AssertExpectations(t)
+}

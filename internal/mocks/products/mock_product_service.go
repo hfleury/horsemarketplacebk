@@ -52,3 +52,11 @@ func (m *MockProductService) Search(ctx context.Context, query string, categoryI
 	}
 	return args.Get(0).(*models.PaginatedProducts), args.Error(1)
 }
+
+func (m *MockProductService) FindSimilar(ctx context.Context, id string, limit int) ([]*models.Product, error) {
+	args := m.Called(ctx, id, limit)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*models.Product), args.Error(1)
+}

@@ -26,6 +26,7 @@ type ProductService interface {
 	Delete(ctx context.Context, id string, userID string, isAdmin bool) error
 	// Specific searches
 	Search(ctx context.Context, query string, categoryID string, fieldMap map[string]string, horseFilter *models.HorseFilter, locationFilter *models.LocationFilter, page, limit int) (*models.PaginatedProducts, error)
+	FindSimilar(ctx context.Context, id string, limit int) ([]*models.Product, error)
 }
 
 type ProductServiceImp struct {
@@ -189,4 +190,15 @@ func (s *ProductServiceImp) Search(ctx context.Context, query string, categoryID
 		return nil, err
 	}
 	return &models.PaginatedProducts{Items: items, Total: total, Page: page, Limit: limit}, nil
+}
+
+func (s *ProductServiceImp) FindSimilar(ctx context.Context, id string, limit int) ([]*models.Product, error) {
+	source, err := s.repo.FindByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if source == nil {
+		return nil, nil
+	}
+	return s.repo.FindSimilar(ctx, source, limit)
 }

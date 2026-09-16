@@ -339,3 +339,78 @@ func TestSearch_ByLocationFilter_ForwardsToRepo(t *testing.T) {
 	assert.Equal(t, 1, result.Total)
 	mockRepo.AssertExpectations(t)
 }
+
+func TestFindSimilar_ReturnsRepoResults(t *testing.T) {
+	mockRepo := new(mockProducts.MockProductRepo)
+	mockSettings := new(mockSystem.MockSettingsRepo)
+	logger := config.NewZerologService()
+
+	service := services.NewProductService(mockRepo, mockSettings, logger, new(mockGeocoding.MockGeocodingClient))
+
+	productID := uuid.New()
+	source := &models.Product{ID: productID, Type: models.TypeHorse}
+	similar := []*models.Product{{Title: "Similar Horse"}}
+
+	mockRepo.On("FindByID", mock.Anything, productID.String()).Return(source, nil)
+	mockRepo.On("FindSimilar", mock.Anything, source, 6).Return(similar, nil)
+
+	result, err := service.FindSimilar(context.Background(), productID.String(), 6)
+
+	assert.NoError(t, err)
+	assert.Equal(t, similar, result)
+	mockRepo.AssertExpectations(t)
+}
+
+func TestFindSimilar_SourceNotFound_ReturnsNilWithoutCallingRepo(t *testing.T) {
+	mockRepo := new(mockProducts.MockProductRepo)
+	mockSettings := new(mockSystem.MockSettingsRepo)
+	logger := config.NewZerologService()
+
+	service := services.NewProductService(mockRepo, mockSettings, logger, new(mockGeocoding.MockGeocodingClient))
+
+	productID := uuid.New()
+	mockRepo.On("FindByID", mock.Anything, productID.String()).Return(nil, nil)
+
+	result, err := service.FindSimilar(context.Background(), productID.String(), 6)
+
+	assert.NoError(t, err)
+	assert.Nil(t, result)
+	mockRepo.AssertNotCalled(t, "FindSimilar", mock.Anything, mock.Anything, mock.Anything)
+}
+
+func TestFindSimilar_FindByIDError_PropagatesWithoutCallingRepo(t *testing.T) {
+	mockRepo := new(mockProducts.MockProductRepo)
+	mockSettings := new(mockSystem.MockSettingsRepo)
+	logger := config.NewZerologService()
+
+	service := services.NewProductService(mockRepo, mockSettings, logger, new(mockGeocoding.MockGeocodingClient))
+
+	productID := uuid.New()
+	mockRepo.On("FindByID", mock.Anything, productID.String()).Return(nil, errors.New("db error"))
+
+	result, err := service.FindSimilar(context.Background(), productID.String(), 6)
+
+	assert.Error(t, err)
+	assert.Nil(t, result)
+	mockRepo.AssertNotCalled(t, "FindSimilar", mock.Anything, mock.Anything, mock.Anything)
+}
+
+func TestFindSimilar_RepoError_Propagates(t *testing.T) {
+	mockRepo := new(mockProducts.MockProductRepo)
+	mockSettings := new(mockSystem.MockSettingsRepo)
+	logger := config.NewZerologService()
+
+	service := services.NewProductService(mockRepo, mockSettings, logger, new(mockGeocoding.MockGeocodingClient))
+
+	productID := uuid.New()
+	source := &models.Product{ID: productID}
+
+	mockRepo.On("FindByID", mock.Anything, productID.String()).Return(source, nil)
+	mockRepo.On("FindSimilar", mock.Anything, source, 6).Return(nil, errors.New("db error"))
+
+	result, err := service.FindSimilar(context.Background(), productID.String(), 6)
+
+	assert.Error(t, err)
+	assert.Nil(t, result)
+	mockRepo.AssertExpectations(t)
+}
