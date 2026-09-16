@@ -24,6 +24,7 @@ type ProductRepository interface {
 	FindByCategory(ctx context.Context, categoryID string, page, limit int) (items []*models.Product, total int, err error)
 	FindByField(ctx context.Context, fieldName string, value string) ([]*models.Product, error)
 	SearchByFilter(ctx context.Context, categoryID, query string, filter *models.HorseFilter, locationFilter *models.LocationFilter, page, limit int) (items []*models.Product, total int, err error)
+	FindSimilar(ctx context.Context, source *models.Product, limit int) ([]*models.Product, error)
 	FindMediaByProductID(ctx context.Context, productID string) ([]models.ProductMedia, error)
 	CountFavoritesByProductID(ctx context.Context, productID string) (int, error)
 	UpdateStatus(ctx context.Context, id string, status models.ProductStatus) error
@@ -486,6 +487,128 @@ func (r *ProductRepoPsql) SearchByFilter(ctx context.Context, categoryID, query 
 		products = append(products, p)
 	}
 	return products, total, nil
+}
+
+// similarPriceBandPercent/similarAgeBandYears bound how close a candidate's
+// price/age must be to the source listing's to count as a "similar" match in
+// buildSimilarityTiers' most specific tier.
+const (
+	similarPriceBandPercent = 0.20
+	similarAgeBandYears     = 3
+)
+
+// similarityTier is one WHERE-clause candidate in decreasing order of
+// specificity for FindSimilar's fallback search.
+type similarityTier struct {
+	conditions []string
+	args       []any
+}
+
+// buildSimilarityTiers returns similarity tiers from most to least specific:
+// for a horse listing with a known breed, (1) same category + breed + a
+// price/age band around the source's own values, (2) same category + breed,
+// then always (3) same category alone. Every tier requires the candidate be
+// published and excludes the source listing itself. A source with no
+// category can't be matched by any tier, so an empty slice is returned.
+func buildSimilarityTiers(source *models.Product) []similarityTier {
+	if source.CategoryID == nil {
+		return nil
+	}
+
+	baseConditions := []string{"p.category_id = $1", "p.status = $2", "p.id != $3"}
+	baseArgs := []any{*source.CategoryID, models.StatusPublished, source.ID}
+
+	var tiers []similarityTier
+
+	if source.Type == models.TypeHorse && source.Horse != nil && source.Horse.Breed != nil {
+		breedConditions := append(append([]string{}, baseConditions...), "h.breed = $4")
+		breedArgs := append(append([]any{}, baseArgs...), *source.Horse.Breed)
+
+		if source.PriceSEK != nil || source.Horse.Age != nil {
+			bandConditions := append([]string{}, breedConditions...)
+			bandArgs := append([]any{}, breedArgs...)
+
+			if source.PriceSEK != nil {
+				minPrice := *source.PriceSEK * (1 - similarPriceBandPercent)
+				maxPrice := *source.PriceSEK * (1 + similarPriceBandPercent)
+				bandArgs = append(bandArgs, minPrice, maxPrice)
+				n := len(bandArgs)
+				bandConditions = append(bandConditions, fmt.Sprintf("p.price_sek BETWEEN $%d AND $%d", n-1, n))
+			}
+			if source.Horse.Age != nil {
+				minAge := *source.Horse.Age - similarAgeBandYears
+				maxAge := *source.Horse.Age + similarAgeBandYears
+				bandArgs = append(bandArgs, minAge, maxAge)
+				n := len(bandArgs)
+				bandConditions = append(bandConditions, fmt.Sprintf("h.age BETWEEN $%d AND $%d", n-1, n))
+			}
+
+			tiers = append(tiers, similarityTier{conditions: bandConditions, args: bandArgs})
+		}
+
+		tiers = append(tiers, similarityTier{conditions: breedConditions, args: breedArgs})
+	}
+
+	return append(tiers, similarityTier{conditions: baseConditions, args: baseArgs})
+}
+
+// FindSimilar returns up to limit other published listings similar to
+// source, querying buildSimilarityTiers' tiers in order and stopping as soon
+// as enough results are collected.
+func (r *ProductRepoPsql) FindSimilar(ctx context.Context, source *models.Product, limit int) ([]*models.Product, error) {
+	tiers := buildSimilarityTiers(source)
+	if len(tiers) == 0 {
+		return []*models.Product{}, nil
+	}
+
+	seen := map[uuid.UUID]bool{source.ID: true}
+	results := []*models.Product{}
+
+	for _, tier := range tiers {
+		if len(results) >= limit {
+			break
+		}
+
+		products, err := r.querySimilarTier(ctx, tier, limit-len(results))
+		if err != nil {
+			return nil, err
+		}
+
+		for _, p := range products {
+			if seen[p.ID] {
+				continue
+			}
+			seen[p.ID] = true
+			results = append(results, p)
+			if len(results) >= limit {
+				break
+			}
+		}
+	}
+
+	return results, nil
+}
+
+func (r *ProductRepoPsql) querySimilarTier(ctx context.Context, tier similarityTier, limit int) ([]*models.Product, error) {
+	args := append(append([]any{}, tier.args...), limit)
+	query := selectFullProduct + " WHERE " + strings.Join(tier.conditions, " AND ") +
+		fmt.Sprintf(" ORDER BY p.created_at DESC LIMIT $%d", len(args))
+
+	rows, err := r.psql.Query(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var products []*models.Product
+	for rows.Next() {
+		p, err := r.scanProduct(ctx, rows)
+		if err != nil {
+			continue
+		}
+		products = append(products, p)
+	}
+	return products, nil
 }
 
 func (r *ProductRepoPsql) UpdateStatus(ctx context.Context, id string, status models.ProductStatus) error {

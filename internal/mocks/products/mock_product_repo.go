@@ -59,6 +59,14 @@ func (m *MockProductRepo) SearchByFilter(ctx context.Context, categoryID, query 
 	return args.Get(0).([]*models.Product), args.Int(1), args.Error(2)
 }
 
+func (m *MockProductRepo) FindSimilar(ctx context.Context, source *models.Product, limit int) ([]*models.Product, error) {
+	args := m.Called(ctx, source, limit)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*models.Product), args.Error(1)
+}
+
 func (m *MockProductRepo) FindMediaByProductID(ctx context.Context, productID string) ([]models.ProductMedia, error) {
 	args := m.Called(ctx, productID)
 	if args.Get(0) == nil {

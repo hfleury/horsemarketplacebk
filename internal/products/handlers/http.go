@@ -13,6 +13,14 @@ import (
 	"github.com/hfleury/horsemarketplacebk/internal/products/services"
 )
 
+// defaultSimilarLimit/maxSimilarLimit bound the "limit" query param on
+// GetSimilar, mirroring List's page/limit default-then-cap idiom but sized
+// for a fixed "related listings" strip rather than a browsable list.
+const (
+	defaultSimilarLimit = 6
+	maxSimilarLimit     = 20
+)
+
 type ProductHandler struct {
 	service services.ProductService
 	logger  config.Logging
@@ -70,6 +78,35 @@ func (h *ProductHandler) Get(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, common.NewSuccessResponse(product))
+}
+
+func (h *ProductHandler) GetSimilar(c *gin.Context) {
+	id := c.Param("id")
+	if id == "" {
+		c.JSON(http.StatusBadRequest, common.NewErrorResponse("Product ID required"))
+		return
+	}
+
+	limit, err := strconv.Atoi(c.Query("limit"))
+	if err != nil || limit < 1 {
+		limit = defaultSimilarLimit
+	}
+	if limit > maxSimilarLimit {
+		limit = maxSimilarLimit
+	}
+
+	products, err := h.service.FindSimilar(c.Request.Context(), id, limit)
+	if err != nil {
+		h.logger.Log(c.Request.Context(), config.ErrorLevel, "Failed to get similar products", map[string]any{"error": err.Error(), "id": id})
+		c.JSON(http.StatusInternalServerError, common.NewErrorResponse("Internal server error"))
+		return
+	}
+	if products == nil {
+		c.JSON(http.StatusNotFound, common.NewErrorResponse("Product not found"))
+		return
+	}
+
+	c.JSON(http.StatusOK, common.NewSuccessResponse(products))
 }
 
 func (h *ProductHandler) List(c *gin.Context) {

@@ -32,6 +32,7 @@ func registerProductRoutes(router *gin.Engine, logger config.Logging, handler *p
 		// Public
 		products.GET("", handler.List)
 		products.GET("/:id", handler.Get)
+		products.GET("/:id/similar", handler.GetSimilar)
 
 		// Protected
 		authMiddleware := middleware.NewAuthMiddleware(tokenService, logger)
