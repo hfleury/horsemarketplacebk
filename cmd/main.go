@@ -25,6 +25,8 @@ import (
 	productHandlers "github.com/hfleury/horsemarketplacebk/internal/products/handlers"
 	productRepos "github.com/hfleury/horsemarketplacebk/internal/products/repositories"
 	productServices "github.com/hfleury/horsemarketplacebk/internal/products/services"
+	reportRepos "github.com/hfleury/horsemarketplacebk/internal/reports/repositories"
+	reportServices "github.com/hfleury/horsemarketplacebk/internal/reports/services"
 	"github.com/hfleury/horsemarketplacebk/internal/router"
 	"github.com/hfleury/horsemarketplacebk/internal/system"
 	"github.com/hfleury/horsemarketplacebk/internal/tasks"
@@ -66,6 +68,7 @@ func initializeApp(ctx context.Context, configService config.Configuration, newD
 	systemSettingsRepo := system.NewSettingsRepoPsql(db, logger)
 	productRepo := productRepos.NewProductRepoPsql(db, logger)
 	horseAttributeRepo := horseAttributeRepos.NewHorseAttributeRepoPsql(db, logger)
+	reportRepo := reportRepos.NewReportRepoPsql(db, logger)
 
 	// Services
 	tokenService := services.NewTokenService(configService.GetConfig(), logger)
@@ -74,6 +77,7 @@ func initializeApp(ctx context.Context, configService config.Configuration, newD
 	mapboxClient := geocoding.NewMapboxClient(configService.GetConfig().Mapbox.APIKey)
 	productService := productServices.NewProductService(productRepo, systemSettingsRepo, logger, mapboxClient)
 	horseAttributeService := horseAttributeServices.NewHorseAttributeService(horseAttributeRepo, logger)
+	reportService := reportServices.NewReportService(reportRepo, productRepo, logger)
 
 	// Handlers
 	productHandler := productHandlers.NewProductHandler(productService, logger)
@@ -163,7 +167,7 @@ func initializeApp(ctx context.Context, configService config.Configuration, newD
 	server.Use(middleware.LoggerMiddleware(logger))
 
 	// routes
-	server = router.SetupRouter(server, logger, userService, tokenService, categoryService, mediaService, productService, productHandler, horseAttributeService, geocodingHandler)
+	server = router.SetupRouter(server, logger, userService, tokenService, categoryService, mediaService, productService, productHandler, horseAttributeService, geocodingHandler, reportService)
 
 	return server, nil
 }
