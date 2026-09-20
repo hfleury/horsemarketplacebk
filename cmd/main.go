@@ -20,6 +20,8 @@ import (
 	horseAttributeRepos "github.com/hfleury/horsemarketplacebk/internal/horseattributes/repositories"
 	horseAttributeServices "github.com/hfleury/horsemarketplacebk/internal/horseattributes/services"
 	"github.com/hfleury/horsemarketplacebk/internal/media"
+	messagingRepos "github.com/hfleury/horsemarketplacebk/internal/messaging/repositories"
+	messagingServices "github.com/hfleury/horsemarketplacebk/internal/messaging/services"
 	"github.com/hfleury/horsemarketplacebk/internal/middleware"
 	mockemail "github.com/hfleury/horsemarketplacebk/internal/mocks/email"
 	productHandlers "github.com/hfleury/horsemarketplacebk/internal/products/handlers"
@@ -69,6 +71,8 @@ func initializeApp(ctx context.Context, configService config.Configuration, newD
 	productRepo := productRepos.NewProductRepoPsql(db, logger)
 	horseAttributeRepo := horseAttributeRepos.NewHorseAttributeRepoPsql(db, logger)
 	reportRepo := reportRepos.NewReportRepoPsql(db, logger)
+	conversationRepo := messagingRepos.NewConversationRepoPsql(db, logger)
+	messageRepo := messagingRepos.NewMessageRepoPsql(db, logger)
 
 	// Services
 	tokenService := services.NewTokenService(configService.GetConfig(), logger)
@@ -78,6 +82,7 @@ func initializeApp(ctx context.Context, configService config.Configuration, newD
 	productService := productServices.NewProductService(productRepo, systemSettingsRepo, logger, mapboxClient)
 	horseAttributeService := horseAttributeServices.NewHorseAttributeService(horseAttributeRepo, logger)
 	reportService := reportServices.NewReportService(reportRepo, productRepo, logger)
+	messagingService := messagingServices.NewMessagingService(conversationRepo, messageRepo, productRepo, logger)
 
 	// Handlers
 	productHandler := productHandlers.NewProductHandler(productService, logger)
@@ -167,7 +172,7 @@ func initializeApp(ctx context.Context, configService config.Configuration, newD
 	server.Use(middleware.LoggerMiddleware(logger))
 
 	// routes
-	server = router.SetupRouter(server, logger, userService, tokenService, categoryService, mediaService, productService, productHandler, horseAttributeService, geocodingHandler, reportService)
+	server = router.SetupRouter(server, logger, userService, tokenService, categoryService, mediaService, productService, productHandler, horseAttributeService, geocodingHandler, reportService, messagingService)
 
 	return server, nil
 }
