@@ -44,3 +44,16 @@ func (m *MockConversationRepository) MarkReadBySeller(ctx context.Context, id st
 	args := m.Called(ctx, id)
 	return args.Error(0)
 }
+
+func (m *MockConversationRepository) FindByUserID(ctx context.Context, userID string, page, limit int) ([]*models.ConversationSummary, int, error) {
+	args := m.Called(ctx, userID, page, limit)
+	if args.Get(0) == nil {
+		return nil, args.Int(1), args.Error(2)
+	}
+	return args.Get(0).([]*models.ConversationSummary), args.Int(1), args.Error(2)
+}
+
+func (m *MockConversationRepository) CountUnreadByUserID(ctx context.Context, userID string) (int, error) {
+	args := m.Called(ctx, userID)
+	return args.Int(0), args.Error(1)
+}

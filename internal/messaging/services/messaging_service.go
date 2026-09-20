@@ -72,7 +72,7 @@ func (s *MessagingService) CreateConversation(ctx context.Context, req models.Cr
 	return s.conversationRepo.Create(ctx, conversation)
 }
 
-func (s *MessagingService) SendMessage(ctx context.Context, conversationID string, req models.SendMessageRequest, senderUserID string) (*models.Message, error) {
+func (s *MessagingService) SendMessage(ctx context.Context, conversationID string, req models.SendMessageRequest, senderUserID string) (*models.MessageResponse, error) {
 	body := strings.TrimSpace(req.Body)
 	if body == "" {
 		return nil, ErrEmptyMessageBody
@@ -101,10 +101,22 @@ func (s *MessagingService) SendMessage(ctx context.Context, conversationID strin
 		Body:           body,
 	}
 
-	return s.messageRepo.Create(ctx, message)
+	created, err := s.messageRepo.Create(ctx, message)
+	if err != nil {
+		return nil, err
+	}
+
+	return &models.MessageResponse{
+		ID:             created.ID,
+		ConversationID: created.ConversationID,
+		SenderID:       created.SenderID,
+		Body:           created.Body,
+		CreatedAt:      created.CreatedAt,
+		IsMine:         true,
+	}, nil
 }
 
-func (s *MessagingService) ListMessages(ctx context.Context, conversationID string, requesterUserID string, afterID int64, limit int) ([]*models.Message, bool, error) {
+func (s *MessagingService) ListMessages(ctx context.Context, conversationID string, requesterUserID string, afterID int64, limit int) ([]*models.MessageResponse, bool, error) {
 	conversation, err := s.conversationRepo.FindByID(ctx, conversationID)
 	if err != nil {
 		return nil, false, err
@@ -132,5 +144,40 @@ func (s *MessagingService) ListMessages(ctx context.Context, conversationID stri
 		s.logger.Log(ctx, config.ErrorLevel, "Failed to mark conversation as read", map[string]any{"error": markReadErr.Error(), "conversation_id": conversationID})
 	}
 
-	return messages, hasMore, nil
+	responses := make([]*models.MessageResponse, len(messages))
+	for i, msg := range messages {
+		responses[i] = &models.MessageResponse{
+			ID:             msg.ID,
+			ConversationID: msg.ConversationID,
+			SenderID:       msg.SenderID,
+			Body:           msg.Body,
+			CreatedAt:      msg.CreatedAt,
+			IsMine:         msg.SenderID.String() == requesterUserID,
+		}
+	}
+
+	return responses, hasMore, nil
+}
+
+func (s *MessagingService) ListConversations(ctx context.Context, userID string, page, limit int) (*models.PaginatedConversationSummaries, error) {
+	if page < 1 {
+		page = 1
+	}
+	if limit < 1 {
+		limit = 20
+	}
+	if limit > 100 {
+		limit = 100
+	}
+
+	items, total, err := s.conversationRepo.FindByUserID(ctx, userID, page, limit)
+	if err != nil {
+		return nil, err
+	}
+
+	return &models.PaginatedConversationSummaries{Items: items, Total: total, Page: page, Limit: limit}, nil
+}
+
+func (s *MessagingService) CountUnreadConversations(ctx context.Context, userID string) (int, error) {
+	return s.conversationRepo.CountUnreadByUserID(ctx, userID)
 }

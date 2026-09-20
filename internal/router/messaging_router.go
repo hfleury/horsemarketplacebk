@@ -19,6 +19,8 @@ func registerMessagingRoutes(router *gin.Engine, logger config.Logging, messagin
 	protected := conversationRoutes.Use(authMiddleware.RequireAuth())
 	{
 		protected.POST("", messagingHandler.CreateConversation)
+		protected.GET("", messagingHandler.ListConversations)
+		protected.GET("/unread-count", messagingHandler.CountUnreadConversations)
 		protected.POST("/:id/messages", messagingHandler.SendMessage)
 		protected.GET("/:id/messages", messagingHandler.ListMessages)
 	}

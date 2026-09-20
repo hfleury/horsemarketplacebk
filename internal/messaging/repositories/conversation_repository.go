@@ -16,6 +16,8 @@ type ConversationRepository interface {
 	FindByProductAndBuyer(ctx context.Context, productID, buyerID string) (*models.Conversation, error)
 	MarkReadByBuyer(ctx context.Context, id string) error
 	MarkReadBySeller(ctx context.Context, id string) error
+	FindByUserID(ctx context.Context, userID string, page, limit int) ([]*models.ConversationSummary, int, error)
+	CountUnreadByUserID(ctx context.Context, userID string) (int, error)
 }
 
 type ConversationRepoPsql struct {
@@ -137,4 +139,94 @@ func (r *ConversationRepoPsql) MarkReadBySeller(ctx context.Context, id string) 
 		return err
 	}
 	return nil
+}
+
+func (r *ConversationRepoPsql) FindByUserID(ctx context.Context, userID string, page, limit int) ([]*models.ConversationSummary, int, error) {
+	offset := (page - 1) * limit
+
+	var total int
+	if err := r.psql.QueryRow(ctx, `SELECT COUNT(*) FROM catalog.conversations WHERE buyer_id = $1 OR seller_id = $1`, userID).Scan(&total); err != nil {
+		r.logger.Log(ctx, config.ErrorLevel, "Failed to count conversations for user", map[string]any{"error": err.Error(), "user_id": userID})
+		return nil, 0, err
+	}
+
+	query := `
+		SELECT
+			c.id, c.product_id, p.title, thumb.url,
+			CASE WHEN c.buyer_id = $1 THEN c.seller_id ELSE c.buyer_id END,
+			counterparty.username,
+			lm.body, lm.sender_id, lm.created_at,
+			CASE WHEN c.buyer_id = $1 THEN (c.buyer_last_read_at IS NULL OR c.buyer_last_read_at < COALESCE(lm.created_at, c.created_at))
+			     ELSE (c.seller_last_read_at IS NULL OR c.seller_last_read_at < COALESCE(lm.created_at, c.created_at)) END,
+			c.created_at, c.updated_at
+		FROM catalog.conversations c
+		JOIN catalog.products p ON p.id = c.product_id
+		JOIN auth.users counterparty ON counterparty.id = CASE WHEN c.buyer_id = $1 THEN c.seller_id ELSE c.buyer_id END
+		LEFT JOIN LATERAL (
+			SELECT body, sender_id, created_at
+			FROM catalog.messages
+			WHERE conversation_id = c.id
+			ORDER BY id DESC
+			LIMIT 1
+		) lm ON true
+		LEFT JOIN LATERAL (
+			SELECT m.url
+			FROM catalog.product_media pm
+			JOIN media.media m ON m.id = pm.media_id
+			WHERE pm.product_id = c.product_id AND pm.is_primary = true
+			LIMIT 1
+		) thumb ON true
+		WHERE c.buyer_id = $1 OR c.seller_id = $1
+		ORDER BY COALESCE(lm.created_at, c.created_at) DESC
+		LIMIT $2 OFFSET $3
+	`
+	rows, err := r.psql.Query(ctx, query, userID, limit, offset)
+	if err != nil {
+		r.logger.Log(ctx, config.ErrorLevel, "Failed to find conversations for user", map[string]any{"error": err.Error(), "user_id": userID})
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	var summaries []*models.ConversationSummary
+	for rows.Next() {
+		var s models.ConversationSummary
+		if err := rows.Scan(
+			&s.ID, &s.ProductID, &s.ProductTitle, &s.ProductThumbnailURL,
+			&s.CounterpartyID, &s.CounterpartyUsername,
+			&s.LastMessageBody, &s.LastMessageSenderID, &s.LastMessageAt,
+			&s.IsUnread,
+			&s.CreatedAt, &s.UpdatedAt,
+		); err != nil {
+			r.logger.Log(ctx, config.ErrorLevel, "Failed to scan conversation summary", map[string]any{"error": err.Error(), "user_id": userID})
+			return nil, 0, err
+		}
+		summaries = append(summaries, &s)
+	}
+
+	return summaries, total, nil
+}
+
+func (r *ConversationRepoPsql) CountUnreadByUserID(ctx context.Context, userID string) (int, error) {
+	query := `
+		SELECT COUNT(*)
+		FROM catalog.conversations c
+		LEFT JOIN LATERAL (
+			SELECT created_at
+			FROM catalog.messages
+			WHERE conversation_id = c.id
+			ORDER BY id DESC
+			LIMIT 1
+		) lm ON true
+		WHERE (c.buyer_id = $1 OR c.seller_id = $1)
+		AND (
+			CASE WHEN c.buyer_id = $1 THEN (c.buyer_last_read_at IS NULL OR c.buyer_last_read_at < COALESCE(lm.created_at, c.created_at))
+			     ELSE (c.seller_last_read_at IS NULL OR c.seller_last_read_at < COALESCE(lm.created_at, c.created_at)) END
+		)
+	`
+	var count int
+	if err := r.psql.QueryRow(ctx, query, userID).Scan(&count); err != nil {
+		r.logger.Log(ctx, config.ErrorLevel, "Failed to count unread conversations for user", map[string]any{"error": err.Error(), "user_id": userID})
+		return 0, err
+	}
+	return count, nil
 }
