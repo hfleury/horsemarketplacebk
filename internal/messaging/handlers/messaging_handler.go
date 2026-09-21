@@ -133,3 +133,49 @@ func (h *MessagingHandler) ListMessages(c *gin.Context) {
 
 	c.JSON(http.StatusOK, common.NewSuccessResponse(models.ListMessagesResponse{Messages: messages, HasMore: hasMore}))
 }
+
+func (h *MessagingHandler) ListConversations(c *gin.Context) {
+	page, err := strconv.Atoi(c.Query("page"))
+	if err != nil || page < 1 {
+		page = 1
+	}
+	limit, err := strconv.Atoi(c.Query("limit"))
+	if err != nil || limit < 1 {
+		limit = 20
+	}
+	if limit > 100 {
+		limit = 100
+	}
+
+	userIDStr, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, common.NewErrorResponse("Unauthorized"))
+		return
+	}
+
+	result, err := h.service.ListConversations(c.Request.Context(), userIDStr.(string), page, limit)
+	if err != nil {
+		h.logger.Log(c.Request.Context(), config.ErrorLevel, "Failed to list conversations", map[string]any{"error": err.Error()})
+		c.JSON(http.StatusInternalServerError, common.NewErrorResponse("Failed to list conversations"))
+		return
+	}
+
+	c.JSON(http.StatusOK, common.NewSuccessResponse(result))
+}
+
+func (h *MessagingHandler) CountUnreadConversations(c *gin.Context) {
+	userIDStr, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, common.NewErrorResponse("Unauthorized"))
+		return
+	}
+
+	count, err := h.service.CountUnreadConversations(c.Request.Context(), userIDStr.(string))
+	if err != nil {
+		h.logger.Log(c.Request.Context(), config.ErrorLevel, "Failed to count unread conversations", map[string]any{"error": err.Error()})
+		c.JSON(http.StatusInternalServerError, common.NewErrorResponse("Failed to count unread conversations"))
+		return
+	}
+
+	c.JSON(http.StatusOK, common.NewSuccessResponse(gin.H{"unread_count": count}))
+}

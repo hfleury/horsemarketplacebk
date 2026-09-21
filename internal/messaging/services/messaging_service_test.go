@@ -7,10 +7,10 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/hfleury/horsemarketplacebk/config"
-	mockmessaging "github.com/hfleury/horsemarketplacebk/internal/mocks/messaging"
-	mockProducts "github.com/hfleury/horsemarketplacebk/internal/mocks/products"
 	"github.com/hfleury/horsemarketplacebk/internal/messaging/models"
 	"github.com/hfleury/horsemarketplacebk/internal/messaging/services"
+	mockmessaging "github.com/hfleury/horsemarketplacebk/internal/mocks/messaging"
+	mockProducts "github.com/hfleury/horsemarketplacebk/internal/mocks/products"
 	productModels "github.com/hfleury/horsemarketplacebk/internal/products/models"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -195,10 +195,11 @@ func TestListMessages_SuccessMarksReadByBuyer(t *testing.T) {
 	buyerID := uuid.New()
 	sellerID := uuid.New()
 	conversation := &models.Conversation{ID: conversationID, BuyerID: buyerID, SellerID: sellerID}
-	expected := []*models.Message{{ID: 1, ConversationID: conversationID, Body: "hi"}}
+	repoMessages := []*models.Message{{ID: 1, ConversationID: conversationID, SenderID: buyerID, Body: "hi"}}
+	expected := []*models.MessageResponse{{ID: 1, ConversationID: conversationID, SenderID: buyerID, Body: "hi", IsMine: true}}
 
 	mockConversationRepo.On("FindByID", mock.Anything, conversationID.String()).Return(conversation, nil)
-	mockMessageRepo.On("FindByConversationID", mock.Anything, conversationID.String(), int64(0), 20).Return(expected, false, nil)
+	mockMessageRepo.On("FindByConversationID", mock.Anything, conversationID.String(), int64(0), 20).Return(repoMessages, false, nil)
 	mockConversationRepo.On("MarkReadByBuyer", mock.Anything, conversationID.String()).Return(nil)
 
 	messages, hasMore, err := service.ListMessages(context.Background(), conversationID.String(), buyerID.String(), 0, 20)
@@ -217,10 +218,14 @@ func TestListMessages_SuccessMarksReadBySeller(t *testing.T) {
 	buyerID := uuid.New()
 	sellerID := uuid.New()
 	conversation := &models.Conversation{ID: conversationID, BuyerID: buyerID, SellerID: sellerID}
-	expected := []*models.Message{{ID: 1, ConversationID: conversationID, Body: "hi"}, {ID: 2, ConversationID: conversationID, Body: "there"}}
+	repoMessages := []*models.Message{{ID: 1, ConversationID: conversationID, SenderID: buyerID, Body: "hi"}, {ID: 2, ConversationID: conversationID, SenderID: sellerID, Body: "there"}}
+	expected := []*models.MessageResponse{
+		{ID: 1, ConversationID: conversationID, SenderID: buyerID, Body: "hi", IsMine: false},
+		{ID: 2, ConversationID: conversationID, SenderID: sellerID, Body: "there", IsMine: true},
+	}
 
 	mockConversationRepo.On("FindByID", mock.Anything, conversationID.String()).Return(conversation, nil)
-	mockMessageRepo.On("FindByConversationID", mock.Anything, conversationID.String(), int64(0), 1).Return(expected, true, nil)
+	mockMessageRepo.On("FindByConversationID", mock.Anything, conversationID.String(), int64(0), 1).Return(repoMessages, true, nil)
 	mockConversationRepo.On("MarkReadBySeller", mock.Anything, conversationID.String()).Return(nil)
 
 	messages, hasMore, err := service.ListMessages(context.Background(), conversationID.String(), sellerID.String(), 0, 1)
@@ -239,10 +244,11 @@ func TestListMessages_MarkReadErrorStillReturnsMessages(t *testing.T) {
 	buyerID := uuid.New()
 	sellerID := uuid.New()
 	conversation := &models.Conversation{ID: conversationID, BuyerID: buyerID, SellerID: sellerID}
-	expected := []*models.Message{{ID: 1, ConversationID: conversationID, Body: "hi"}}
+	repoMessages := []*models.Message{{ID: 1, ConversationID: conversationID, SenderID: buyerID, Body: "hi"}}
+	expected := []*models.MessageResponse{{ID: 1, ConversationID: conversationID, SenderID: buyerID, Body: "hi", IsMine: true}}
 
 	mockConversationRepo.On("FindByID", mock.Anything, conversationID.String()).Return(conversation, nil)
-	mockMessageRepo.On("FindByConversationID", mock.Anything, conversationID.String(), int64(0), 20).Return(expected, false, nil)
+	mockMessageRepo.On("FindByConversationID", mock.Anything, conversationID.String(), int64(0), 20).Return(repoMessages, false, nil)
 	mockConversationRepo.On("MarkReadByBuyer", mock.Anything, conversationID.String()).Return(errors.New("update failed"))
 
 	messages, hasMore, err := service.ListMessages(context.Background(), conversationID.String(), buyerID.String(), 0, 20)
@@ -250,6 +256,50 @@ func TestListMessages_MarkReadErrorStillReturnsMessages(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, expected, messages)
 	assert.False(t, hasMore)
+}
+
+func TestListConversations_Success(t *testing.T) {
+	service, mockConversationRepo, _, _ := newMessagingService()
+
+	userID := uuid.New()
+	expected := []*models.ConversationSummary{{ID: uuid.New()}}
+	mockConversationRepo.On("FindByUserID", mock.Anything, userID.String(), 1, 20).Return(expected, 1, nil)
+
+	result, err := service.ListConversations(context.Background(), userID.String(), 1, 20)
+
+	assert.NoError(t, err)
+	assert.Equal(t, expected, result.Items)
+	assert.Equal(t, 1, result.Total)
+	assert.Equal(t, 1, result.Page)
+	assert.Equal(t, 20, result.Limit)
+	mockConversationRepo.AssertExpectations(t)
+}
+
+func TestListConversations_ClampsPageAndLimit(t *testing.T) {
+	service, mockConversationRepo, _, _ := newMessagingService()
+
+	userID := uuid.New()
+	mockConversationRepo.On("FindByUserID", mock.Anything, userID.String(), 1, 100).Return([]*models.ConversationSummary{}, 0, nil)
+
+	result, err := service.ListConversations(context.Background(), userID.String(), 0, 500)
+
+	assert.NoError(t, err)
+	assert.Equal(t, 1, result.Page)
+	assert.Equal(t, 100, result.Limit)
+	mockConversationRepo.AssertExpectations(t)
+}
+
+func TestCountUnreadConversations_Success(t *testing.T) {
+	service, mockConversationRepo, _, _ := newMessagingService()
+
+	userID := uuid.New()
+	mockConversationRepo.On("CountUnreadByUserID", mock.Anything, userID.String()).Return(3, nil)
+
+	count, err := service.CountUnreadConversations(context.Background(), userID.String())
+
+	assert.NoError(t, err)
+	assert.Equal(t, 3, count)
+	mockConversationRepo.AssertExpectations(t)
 }
 
 func TestListMessages_NotParticipant(t *testing.T) {
