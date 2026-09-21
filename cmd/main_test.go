@@ -28,6 +28,9 @@ func TestInitializeApp(t *testing.T) {
 			Port:     "5432",
 			SSLMode:  "disable",
 		},
+		Frontend: config.FrontendConfig{
+			URL: "http://localhost:5173",
+		},
 	}).Times(8) // matches initializeApp's 8 configService.GetConfig() call sites (cmd/main.go)
 
 	ctx := context.Background()
