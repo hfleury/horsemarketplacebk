@@ -146,6 +146,7 @@ func (h *MessagingHandler) ListConversations(c *gin.Context) {
 	if limit > 100 {
 		limit = 100
 	}
+	sellerOnly := c.Query("role") == "seller"
 
 	userIDStr, exists := c.Get("user_id")
 	if !exists {
@@ -153,7 +154,7 @@ func (h *MessagingHandler) ListConversations(c *gin.Context) {
 		return
 	}
 
-	result, err := h.service.ListConversations(c.Request.Context(), userIDStr.(string), page, limit)
+	result, err := h.service.ListConversations(c.Request.Context(), userIDStr.(string), page, limit, sellerOnly)
 	if err != nil {
 		h.logger.Log(c.Request.Context(), config.ErrorLevel, "Failed to list conversations", map[string]any{"error": err.Error()})
 		c.JSON(http.StatusInternalServerError, common.NewErrorResponse("Failed to list conversations"))

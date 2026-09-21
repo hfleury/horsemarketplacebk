@@ -47,6 +47,9 @@ func (vs *VipperService) LoadConfiguration() {
 	// Mapbox geocoding
 	vs.Config.Mapbox.APIKey = viper.GetString("MAPBOX_API_KEY")
 
+	// Frontend
+	vs.Config.Frontend.URL = viper.GetString("FRONTEND_URL")
+
 	// Log loaded configuration for debugging
 	log.Printf("Loaded configuration: %+v", vs.Config)
 

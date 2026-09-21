@@ -82,7 +82,7 @@ func initializeApp(ctx context.Context, configService config.Configuration, newD
 	productService := productServices.NewProductService(productRepo, systemSettingsRepo, logger, mapboxClient)
 	horseAttributeService := horseAttributeServices.NewHorseAttributeService(horseAttributeRepo, logger)
 	reportService := reportServices.NewReportService(reportRepo, productRepo, logger)
-	messagingService := messagingServices.NewMessagingService(conversationRepo, messageRepo, productRepo, logger)
+	messagingService := messagingServices.NewMessagingService(conversationRepo, messageRepo, productRepo, userRepo, logger, configService.GetConfig().Frontend.URL)
 
 	// Handlers
 	productHandler := productHandlers.NewProductHandler(productService, logger)
@@ -160,6 +160,7 @@ func initializeApp(ctx context.Context, configService config.Configuration, newD
 		}
 	}
 	userService.SetEmailSender(sender)
+	messagingService.SetEmailSender(sender)
 
 	// Create the Gin router and add middleware
 	server := gin.New()

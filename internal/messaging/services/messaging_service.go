@@ -3,10 +3,13 @@ package services
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 
 	"github.com/google/uuid"
 	"github.com/hfleury/horsemarketplacebk/config"
+	authRepositories "github.com/hfleury/horsemarketplacebk/internal/auth/repositories"
+	"github.com/hfleury/horsemarketplacebk/internal/email"
 	"github.com/hfleury/horsemarketplacebk/internal/messaging/models"
 	"github.com/hfleury/horsemarketplacebk/internal/messaging/repositories"
 	productRepositories "github.com/hfleury/horsemarketplacebk/internal/products/repositories"
@@ -24,16 +27,27 @@ type MessagingService struct {
 	conversationRepo repositories.ConversationRepository
 	messageRepo      repositories.MessageRepository
 	productRepo      productRepositories.ProductRepository
+	userRepo         authRepositories.UserRepository
 	logger           config.Logging
+	frontendURL      string
+	emailSender      email.Sender
 }
 
-func NewMessagingService(conversationRepo repositories.ConversationRepository, messageRepo repositories.MessageRepository, productRepo productRepositories.ProductRepository, logger config.Logging) *MessagingService {
+func NewMessagingService(conversationRepo repositories.ConversationRepository, messageRepo repositories.MessageRepository, productRepo productRepositories.ProductRepository, userRepo authRepositories.UserRepository, logger config.Logging, frontendURL string) *MessagingService {
 	return &MessagingService{
 		conversationRepo: conversationRepo,
 		messageRepo:      messageRepo,
 		productRepo:      productRepo,
+		userRepo:         userRepo,
 		logger:           logger,
+		frontendURL:      frontendURL,
 	}
+}
+
+// SetEmailSender allows wiring an email.Sender after construction without
+// changing existing constructor call sites.
+func (s *MessagingService) SetEmailSender(sender email.Sender) {
+	s.emailSender = sender
 }
 
 func (s *MessagingService) CreateConversation(ctx context.Context, req models.CreateConversationRequest, buyerUserID string) (*models.Conversation, error) {
@@ -106,6 +120,8 @@ func (s *MessagingService) SendMessage(ctx context.Context, conversationID strin
 		return nil, err
 	}
 
+	s.notifyRecipient(ctx, conversation, senderUserID)
+
 	return &models.MessageResponse{
 		ID:             created.ID,
 		ConversationID: created.ConversationID,
@@ -114,6 +130,31 @@ func (s *MessagingService) SendMessage(ctx context.Context, conversationID strin
 		CreatedAt:      created.CreatedAt,
 		IsMine:         true,
 	}, nil
+}
+
+func (s *MessagingService) notifyRecipient(ctx context.Context, conversation *models.Conversation, senderUserID string) {
+	if s.emailSender == nil {
+		return
+	}
+
+	recipientID := conversation.SellerID
+	if senderUserID != conversation.BuyerID.String() {
+		recipientID = conversation.BuyerID
+	}
+
+	recipient, err := s.userRepo.SelectUserByID(ctx, recipientID.String())
+	if err != nil {
+		s.logger.Log(ctx, config.ErrorLevel, "failed to look up message notification recipient", map[string]any{"error": err.Error()})
+		return
+	}
+	if recipient == nil || recipient.Email == nil {
+		return
+	}
+
+	body := fmt.Sprintf("You have a new message on HorseMarketplace.\n\nView and reply: %s/inbox", s.frontendURL)
+	if err := s.emailSender.Send(ctx, *recipient.Email, "New message on HorseMarketplace", body); err != nil {
+		s.logger.Log(ctx, config.ErrorLevel, "failed to send message notification email", map[string]any{"error": err.Error()})
+	}
 }
 
 func (s *MessagingService) ListMessages(ctx context.Context, conversationID string, requesterUserID string, afterID int64, limit int) ([]*models.MessageResponse, bool, error) {
@@ -159,7 +200,7 @@ func (s *MessagingService) ListMessages(ctx context.Context, conversationID stri
 	return responses, hasMore, nil
 }
 
-func (s *MessagingService) ListConversations(ctx context.Context, userID string, page, limit int) (*models.PaginatedConversationSummaries, error) {
+func (s *MessagingService) ListConversations(ctx context.Context, userID string, page, limit int, sellerOnly bool) (*models.PaginatedConversationSummaries, error) {
 	if page < 1 {
 		page = 1
 	}
@@ -170,7 +211,7 @@ func (s *MessagingService) ListConversations(ctx context.Context, userID string,
 		limit = 100
 	}
 
-	items, total, err := s.conversationRepo.FindByUserID(ctx, userID, page, limit)
+	items, total, err := s.conversationRepo.FindByUserID(ctx, userID, page, limit, sellerOnly)
 	if err != nil {
 		return nil, err
 	}
