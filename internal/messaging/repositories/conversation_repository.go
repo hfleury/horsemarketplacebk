@@ -3,6 +3,7 @@ package repositories
 import (
 	"context"
 	"database/sql"
+	"fmt"
 
 	"github.com/google/uuid"
 	"github.com/hfleury/horsemarketplacebk/config"
@@ -16,7 +17,7 @@ type ConversationRepository interface {
 	FindByProductAndBuyer(ctx context.Context, productID, buyerID string) (*models.Conversation, error)
 	MarkReadByBuyer(ctx context.Context, id string) error
 	MarkReadBySeller(ctx context.Context, id string) error
-	FindByUserID(ctx context.Context, userID string, page, limit int) ([]*models.ConversationSummary, int, error)
+	FindByUserID(ctx context.Context, userID string, page, limit int, sellerOnly bool) ([]*models.ConversationSummary, int, error)
 	CountUnreadByUserID(ctx context.Context, userID string) (int, error)
 }
 
@@ -141,16 +142,22 @@ func (r *ConversationRepoPsql) MarkReadBySeller(ctx context.Context, id string) 
 	return nil
 }
 
-func (r *ConversationRepoPsql) FindByUserID(ctx context.Context, userID string, page, limit int) ([]*models.ConversationSummary, int, error) {
+func (r *ConversationRepoPsql) FindByUserID(ctx context.Context, userID string, page, limit int, sellerOnly bool) ([]*models.ConversationSummary, int, error) {
 	offset := (page - 1) * limit
 
+	whereClause := "c.buyer_id = $1 OR c.seller_id = $1"
+	if sellerOnly {
+		whereClause = "c.seller_id = $1"
+	}
+
 	var total int
-	if err := r.psql.QueryRow(ctx, `SELECT COUNT(*) FROM catalog.conversations WHERE buyer_id = $1 OR seller_id = $1`, userID).Scan(&total); err != nil {
+	countQuery := fmt.Sprintf(`SELECT COUNT(*) FROM catalog.conversations c WHERE %s`, whereClause)
+	if err := r.psql.QueryRow(ctx, countQuery, userID).Scan(&total); err != nil {
 		r.logger.Log(ctx, config.ErrorLevel, "Failed to count conversations for user", map[string]any{"error": err.Error(), "user_id": userID})
 		return nil, 0, err
 	}
 
-	query := `
+	query := fmt.Sprintf(`
 		SELECT
 			c.id, c.product_id, p.title, thumb.url,
 			CASE WHEN c.buyer_id = $1 THEN c.seller_id ELSE c.buyer_id END,
@@ -176,10 +183,10 @@ func (r *ConversationRepoPsql) FindByUserID(ctx context.Context, userID string, 
 			WHERE pm.product_id = c.product_id AND pm.is_primary = true
 			LIMIT 1
 		) thumb ON true
-		WHERE c.buyer_id = $1 OR c.seller_id = $1
+		WHERE %s
 		ORDER BY COALESCE(lm.created_at, c.created_at) DESC
 		LIMIT $2 OFFSET $3
-	`
+	`, whereClause)
 	rows, err := r.psql.Query(ctx, query, userID, limit, offset)
 	if err != nil {
 		r.logger.Log(ctx, config.ErrorLevel, "Failed to find conversations for user", map[string]any{"error": err.Error(), "user_id": userID})

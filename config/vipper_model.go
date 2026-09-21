@@ -16,10 +16,15 @@ type AllConfiguration struct {
 	SMTP      SMTPConfig     `mapstructure:"smtp"`
 	Storage   StorageConfig  `mapstructure:"storage"`
 	Mapbox    MapboxConfig   `mapstructure:"mapbox"`
+	Frontend  FrontendConfig `mapstructure:"frontend"`
 }
 
 type MapboxConfig struct {
 	APIKey string `mapstructure:"mapbox_api_key"`
+}
+
+type FrontendConfig struct {
+	URL string `mapstructure:"frontend_url"`
 }
 
 type StorageConfig struct {

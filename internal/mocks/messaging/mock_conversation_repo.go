@@ -45,8 +45,8 @@ func (m *MockConversationRepository) MarkReadBySeller(ctx context.Context, id st
 	return args.Error(0)
 }
 
-func (m *MockConversationRepository) FindByUserID(ctx context.Context, userID string, page, limit int) ([]*models.ConversationSummary, int, error) {
-	args := m.Called(ctx, userID, page, limit)
+func (m *MockConversationRepository) FindByUserID(ctx context.Context, userID string, page, limit int, sellerOnly bool) ([]*models.ConversationSummary, int, error) {
+	args := m.Called(ctx, userID, page, limit, sellerOnly)
 	if args.Get(0) == nil {
 		return nil, args.Int(1), args.Error(2)
 	}

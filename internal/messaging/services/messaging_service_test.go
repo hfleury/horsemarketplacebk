@@ -5,10 +5,14 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/golang/mock/gomock"
 	"github.com/google/uuid"
 	"github.com/hfleury/horsemarketplacebk/config"
+	authModels "github.com/hfleury/horsemarketplacebk/internal/auth/models"
+	"github.com/hfleury/horsemarketplacebk/internal/email"
 	"github.com/hfleury/horsemarketplacebk/internal/messaging/models"
 	"github.com/hfleury/horsemarketplacebk/internal/messaging/services"
+	mockuserrepo "github.com/hfleury/horsemarketplacebk/internal/mocks/auth/repositories"
 	mockmessaging "github.com/hfleury/horsemarketplacebk/internal/mocks/messaging"
 	mockProducts "github.com/hfleury/horsemarketplacebk/internal/mocks/products"
 	productModels "github.com/hfleury/horsemarketplacebk/internal/products/models"
@@ -21,7 +25,7 @@ func newMessagingService() (*services.MessagingService, *mockmessaging.MockConve
 	mockMessageRepo := new(mockmessaging.MockMessageRepository)
 	mockProductRepo := new(mockProducts.MockProductRepo)
 	logger := config.NewZerologService()
-	service := services.NewMessagingService(mockConversationRepo, mockMessageRepo, mockProductRepo, logger)
+	service := services.NewMessagingService(mockConversationRepo, mockMessageRepo, mockProductRepo, nil, logger, "https://horsemarketplace.example")
 	return service, mockConversationRepo, mockMessageRepo, mockProductRepo
 }
 
@@ -263,9 +267,9 @@ func TestListConversations_Success(t *testing.T) {
 
 	userID := uuid.New()
 	expected := []*models.ConversationSummary{{ID: uuid.New()}}
-	mockConversationRepo.On("FindByUserID", mock.Anything, userID.String(), 1, 20).Return(expected, 1, nil)
+	mockConversationRepo.On("FindByUserID", mock.Anything, userID.String(), 1, 20, false).Return(expected, 1, nil)
 
-	result, err := service.ListConversations(context.Background(), userID.String(), 1, 20)
+	result, err := service.ListConversations(context.Background(), userID.String(), 1, 20, false)
 
 	assert.NoError(t, err)
 	assert.Equal(t, expected, result.Items)
@@ -279,9 +283,9 @@ func TestListConversations_ClampsPageAndLimit(t *testing.T) {
 	service, mockConversationRepo, _, _ := newMessagingService()
 
 	userID := uuid.New()
-	mockConversationRepo.On("FindByUserID", mock.Anything, userID.String(), 1, 100).Return([]*models.ConversationSummary{}, 0, nil)
+	mockConversationRepo.On("FindByUserID", mock.Anything, userID.String(), 1, 100, false).Return([]*models.ConversationSummary{}, 0, nil)
 
-	result, err := service.ListConversations(context.Background(), userID.String(), 0, 500)
+	result, err := service.ListConversations(context.Background(), userID.String(), 0, 500, false)
 
 	assert.NoError(t, err)
 	assert.Equal(t, 1, result.Page)
@@ -300,6 +304,51 @@ func TestCountUnreadConversations_Success(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, 3, count)
 	mockConversationRepo.AssertExpectations(t)
+}
+
+func TestListConversations_SellerOnlyForwardedToRepo(t *testing.T) {
+	service, mockConversationRepo, _, _ := newMessagingService()
+
+	userID := uuid.New()
+	expected := []*models.ConversationSummary{{ID: uuid.New()}}
+	mockConversationRepo.On("FindByUserID", mock.Anything, userID.String(), 1, 20, true).Return(expected, 1, nil)
+
+	result, err := service.ListConversations(context.Background(), userID.String(), 1, 20, true)
+
+	assert.NoError(t, err)
+	assert.Equal(t, expected, result.Items)
+	mockConversationRepo.AssertExpectations(t)
+}
+
+func TestSendMessage_NotifiesCounterpartyByEmail(t *testing.T) {
+	mockConversationRepo := new(mockmessaging.MockConversationRepository)
+	mockMessageRepo := new(mockmessaging.MockMessageRepository)
+	mockProductRepo := new(mockProducts.MockProductRepo)
+	logger := config.NewZerologService()
+
+	ctrl := gomock.NewController(t)
+	mockUserRepo := mockuserrepo.NewMockUserRepository(ctrl)
+	sender := email.NewMockSender()
+
+	service := services.NewMessagingService(mockConversationRepo, mockMessageRepo, mockProductRepo, mockUserRepo, logger, "https://horsemarketplace.example")
+	service.SetEmailSender(sender)
+
+	conversationID := uuid.New()
+	buyerID := uuid.New()
+	sellerID := uuid.New()
+	sellerEmail := "seller@example.com"
+	conversation := &models.Conversation{ID: conversationID, BuyerID: buyerID, SellerID: sellerID}
+
+	mockConversationRepo.On("FindByID", mock.Anything, conversationID.String()).Return(conversation, nil)
+	mockMessageRepo.On("Create", mock.Anything, mock.Anything).Return(&models.Message{ID: 1, ConversationID: conversationID, SenderID: buyerID, Body: "hello"}, nil)
+	mockUserRepo.EXPECT().SelectUserByID(gomock.Any(), sellerID.String()).Return(&authModels.User{Id: &sellerID, Email: &sellerEmail}, nil)
+
+	req := models.SendMessageRequest{Body: "hello"}
+	_, err := service.SendMessage(context.Background(), conversationID.String(), req, buyerID.String())
+
+	assert.NoError(t, err)
+	assert.Equal(t, sellerEmail, sender.LastTo)
+	assert.Equal(t, "New message on HorseMarketplace", sender.LastSubject)
 }
 
 func TestListMessages_NotParticipant(t *testing.T) {

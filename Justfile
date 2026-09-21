@@ -88,6 +88,7 @@ run-local:
     export STORAGE_BUCKET_NAME="horsemarketplace" && \
     export ENVIRONMENT="development" && \
     export REDIS_ADDR="$(minikube ip):30008" && \
+    export FRONTEND_URL="http://localhost:5173" && \
     go run cmd/main.go
 
 # Port forward PostgreSQL for local development (alternative to NodePort)
