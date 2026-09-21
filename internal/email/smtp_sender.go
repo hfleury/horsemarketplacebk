@@ -7,6 +7,7 @@ import (
 	"log"
 	"net"
 	"net/smtp"
+	"strconv"
 	"strings"
 )
 
@@ -28,7 +29,7 @@ func NewSMTPSender(host string, port int, username, password, from string) *SMTP
 // Send implements the Sender interface using net/smtp. It supports servers
 // that require TLS by establishing a TLS connection when necessary.
 func (s *SMTPSender) Send(ctx context.Context, to, subject, body string) error {
-	addr := fmt.Sprintf("%s:%d", s.Host, s.Port)
+	addr := net.JoinHostPort(s.Host, strconv.Itoa(s.Port))
 
 	log.Printf("[SMTPSender] sending email to=%s host=%s port=%d from=%s", to, s.Host, s.Port, s.From)
 

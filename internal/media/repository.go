@@ -59,7 +59,6 @@ func (r *PostgresMediaRepository) FindByID(ctx context.Context, id uuid.UUID) (*
 		return nil, err
 	}
 	return m, nil
-	return m, nil
 }
 
 func (r *PostgresMediaRepository) UpdateVariants(ctx context.Context, id uuid.UUID, variants any) error {
