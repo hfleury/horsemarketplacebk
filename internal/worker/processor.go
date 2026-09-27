@@ -30,12 +30,13 @@ type Processor struct {
 }
 
 func NewProcessor(repo media.MediaRepository, cfg *config.AllConfiguration, logger config.Logging) (*Processor, error) {
+	secure := strings.HasPrefix(cfg.Storage.Endpoint, "https://")
 	endpoint := strings.ReplaceAll(cfg.Storage.Endpoint, "http://", "")
 	endpoint = strings.ReplaceAll(endpoint, "https://", "")
 
 	minioClient, err := minio.New(endpoint, &minio.Options{
 		Creds:  credentials.NewStaticV4(cfg.Storage.AccessKeyID, cfg.Storage.SecretAccessKey, ""),
-		Secure: false,
+		Secure: secure,
 	})
 	if err != nil {
 		return nil, err

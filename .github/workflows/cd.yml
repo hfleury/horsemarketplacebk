@@ -70,12 +70,12 @@ jobs:
             MAIL_FROM=${{ secrets.MAIL_FROM }}
             MAILGUN_DOMAIN=${{ secrets.MAILGUN_DOMAIN }}
             MAILGUN_API_KEY=${{ secrets.MAILGUN_API_KEY }}
-            STORAGE_ENDPOINT=http://minio:9000
+            STORAGE_ENDPOINT=${{ secrets.STORAGE_ENDPOINT }}
             STORAGE_PUBLIC_ENDPOINT=${{ secrets.STORAGE_PUBLIC_ENDPOINT }}
-            STORAGE_REGION=us-east-1
+            STORAGE_REGION=${{ secrets.STORAGE_REGION }}
             STORAGE_ACCESS_KEY_ID=${{ secrets.STORAGE_ACCESS_KEY_ID }}
             STORAGE_SECRET_ACCESS_KEY=${{ secrets.STORAGE_SECRET_ACCESS_KEY }}
-            STORAGE_BUCKET_NAME=horsemarketplace
+            STORAGE_BUCKET_NAME=${{ secrets.STORAGE_BUCKET_NAME }}
             MAPBOX_API_KEY=${{ secrets.MAPBOX_API_KEY }}
             FRONTEND_URL=${{ secrets.FRONTEND_URL }}
             REDIS_ADDR=redis:6379

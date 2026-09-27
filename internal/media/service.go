@@ -26,12 +26,13 @@ type MediaService struct {
 func NewMediaService(repo MediaRepository, queue *asynq.Client, cfg *config.AllConfiguration) (*MediaService, error) {
 	// Initialize MinIO client object
 	// Ensure endpoint doesn't have http schema for MinIO client New
+	secure := strings.HasPrefix(cfg.Storage.Endpoint, "https://")
 	endpoint := strings.ReplaceAll(cfg.Storage.Endpoint, "http://", "")
 	endpoint = strings.ReplaceAll(endpoint, "https://", "")
 
 	minioClient, err := minio.New(endpoint, &minio.Options{
 		Creds:  credentials.NewStaticV4(cfg.Storage.AccessKeyID, cfg.Storage.SecretAccessKey, ""),
-		Secure: false, // Set to true for HTTPS
+		Secure: secure,
 	})
 	if err != nil {
 		return nil, err
