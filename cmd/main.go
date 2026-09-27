@@ -147,6 +147,7 @@ func initializeApp(ctx context.Context, configService config.Configuration, newD
 	userService.SetEmailVerificationRepo(emailVerifRepo)
 	// Email sender selection (in order): SMTP config, Mailgun env, Mock (dev)
 	cfg := configService.GetConfig()
+	userService.SetBackendURL(cfg.Backend.URL)
 	var sender email.Sender
 	if cfg.SMTP.Host != "" && cfg.SMTP.Port != "" && cfg.SMTP.From != "" {
 		// parse port

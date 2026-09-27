@@ -78,6 +78,7 @@ jobs:
             STORAGE_BUCKET_NAME=${{ secrets.STORAGE_BUCKET_NAME }}
             MAPBOX_API_KEY=${{ secrets.MAPBOX_API_KEY }}
             FRONTEND_URL=${{ secrets.FRONTEND_URL }}
+            BACKEND_URL=${{ secrets.BACKEND_URL }}
             REDIS_ADDR=redis:6379
             SENTRY_DSN=${{ secrets.SENTRY_DSN }}
             ENVFILE

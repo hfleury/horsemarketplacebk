@@ -17,6 +17,7 @@ type AllConfiguration struct {
 	Storage   StorageConfig  `mapstructure:"storage"`
 	Mapbox    MapboxConfig   `mapstructure:"mapbox"`
 	Frontend  FrontendConfig `mapstructure:"frontend"`
+	Backend   BackendConfig  `mapstructure:"backend"`
 }
 
 type MapboxConfig struct {
@@ -25,6 +26,10 @@ type MapboxConfig struct {
 
 type FrontendConfig struct {
 	URL string `mapstructure:"frontend_url"`
+}
+
+type BackendConfig struct {
+	URL string `mapstructure:"backend_url"`
 }
 
 type StorageConfig struct {

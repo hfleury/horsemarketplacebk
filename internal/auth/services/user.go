@@ -23,6 +23,7 @@ type UserService struct {
 	sessionRepo    repositories.SessionRepository
 	emailSender    email.Sender
 	emailVerifRepo repositories.EmailVerificationRepository
+	backendURL     string
 }
 
 func NewUserService(userRepo repositories.UserRepository, logger config.Logging, tokenService *TokenService, sessionRepo repositories.SessionRepository) *UserService {
@@ -43,6 +44,13 @@ func (us *UserService) SetEmailSender(s email.Sender) {
 // SetEmailVerificationRepo wires the EmailVerification repository.
 func (us *UserService) SetEmailVerificationRepo(r repositories.EmailVerificationRepository) {
 	us.emailVerifRepo = r
+}
+
+// SetBackendURL wires the backend's own public URL, used to build absolute
+// links (e.g. email verification) that work when clicked outside the app.
+// Left unset, links fall back to a relative path — the prior behavior.
+func (us *UserService) SetBackendURL(url string) {
+	us.backendURL = url
 }
 
 func (us *UserService) CreateUser(ctx context.Context, userRequest models.UserCreateResquest) (*models.User, error) {
@@ -148,7 +156,7 @@ func (us *UserService) CreateUser(ctx context.Context, userRequest models.UserCr
 			us.logger.Log(ctx, config.ErrorLevel, "failed to persist email verification", map[string]any{"error": err.Error()})
 		}
 
-		verifyLink := fmt.Sprintf("/api/v1/auth/verify?token=%s", verificationToken)
+		verifyLink := fmt.Sprintf("%s/api/v1/auth/verify?token=%s", us.backendURL, verificationToken)
 		body := fmt.Sprintf("Hello %s,\n\nPlease verify your email by visiting the following link:\n%s\n\nIf you did not sign up, ignore this message.", func() string {
 			if userCreated.Username != nil {
 				us.logger.Log(ctx, config.InfoLevel, "Preparing verification email", map[string]any{
@@ -487,7 +495,7 @@ func (us *UserService) ResendVerification(ctx context.Context, email string) err
 		return err
 	}
 
-	verifyLink := fmt.Sprintf("/api/v1/auth/verify?token=%s", verificationToken)
+	verifyLink := fmt.Sprintf("%s/api/v1/auth/verify?token=%s", us.backendURL, verificationToken)
 	body := fmt.Sprintf("Hello %s,\n\nPlease verify your email by visiting the following link:\n%s\n\nIf you did not request this, ignore this message.", func() string {
 		if user.Username != nil {
 			return *user.Username

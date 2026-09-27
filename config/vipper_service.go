@@ -50,6 +50,10 @@ func (vs *VipperService) LoadConfiguration() {
 	// Frontend
 	vs.Config.Frontend.URL = viper.GetString("FRONTEND_URL")
 
+	// Backend's own public URL, used to build links (e.g. email verification) that
+	// must work when clicked outside the app, not just relative API paths.
+	vs.Config.Backend.URL = viper.GetString("BACKEND_URL")
+
 	// Log only non-secret fields; the full struct holds PasetoKey/DB password/storage keys/SMTP password
 	log.Printf(
 		"Loaded configuration: Psql.Host=%s Psql.DdName=%s Env=%s Storage.Endpoint=%s Storage.BucketName=%s Frontend.URL=%s",
