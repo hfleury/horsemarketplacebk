@@ -1,0 +1,92 @@
+services:
+  postgres:
+    image: postgis/postgis:16-3.4
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${PSQL_DB_NAME}
+      POSTGRES_USER: ${PSQL_USERNAME}
+      POSTGRES_PASSWORD: ${PSQL_PASSWORD}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${PSQL_USERNAME} -d ${PSQL_DB_NAME}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+
+  minio:
+    image: minio/minio:latest
+    restart: unless-stopped
+    command: server /data --console-address :9001
+    environment:
+      MINIO_ROOT_USER: ${STORAGE_ACCESS_KEY_ID}
+      MINIO_ROOT_PASSWORD: ${STORAGE_SECRET_ACCESS_KEY}
+    ports:
+      - "9000:9000"
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  minio-init:
+    image: minio/mc
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        mc alias set myminio http://minio:9000 ${STORAGE_ACCESS_KEY_ID} ${STORAGE_SECRET_ACCESS_KEY} &&
+        mc mb myminio/${STORAGE_BUCKET_NAME} --ignore-existing &&
+        mc anonymous set public myminio/${STORAGE_BUCKET_NAME}
+
+  migrate:
+    image: migrate/migrate:latest
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./migrations:/migrations:ro
+    command:
+      - "-path"
+      - "/migrations"
+      - "-database"
+      - "postgres://${PSQL_USERNAME}:${PSQL_PASSWORD}@postgres:5432/${PSQL_DB_NAME}?sslmode=disable"
+      - "up"
+
+  backend:
+    image: ghcr.io/hfleury/horsemarketplacebk:latest
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      PSQL_HOST: postgres
+      STORAGE_ENDPOINT: http://minio:9000
+      REDIS_ADDR: redis:6379
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      minio-init:
+        condition: service_completed_successfully
+      migrate:
+        condition: service_completed_successfully
+
+  frontend:
+    image: ghcr.io/hfleury/horsemarketplace-fe:latest
+    restart: unless-stopped
+    ports:
+      - "80:80"
+
+volumes:
+  postgres-data:
+  minio-data:

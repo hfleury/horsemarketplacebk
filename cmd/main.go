@@ -165,7 +165,7 @@ func initializeApp(ctx context.Context, configService config.Configuration, newD
 	// Create the Gin router and add middleware
 	server := gin.New()
 	server.Use(cors.New(cors.Config{
-		AllowOrigins:     []string{"http://localhost:5173"},
+		AllowOrigins:     []string{cfg.Frontend.URL},
 		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
 		AllowHeaders:     []string{"Content-Type", "Authorization"},
 		AllowCredentials: true,
