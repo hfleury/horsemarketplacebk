@@ -77,6 +77,7 @@ jobs:
             FRONTEND_URL=${{ secrets.FRONTEND_URL }}
             REDIS_ADDR=redis:6379
             ENVFILE
+            echo "${{ secrets.GHCR_READ_TOKEN }}" | docker login ghcr.io -u ${{ github.repository_owner }} --password-stdin
             cd /opt/horsemarketplace
             docker compose pull
             docker compose up -d --remove-orphans
