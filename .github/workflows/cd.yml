@@ -79,6 +79,7 @@ jobs:
             MAPBOX_API_KEY=${{ secrets.MAPBOX_API_KEY }}
             FRONTEND_URL=${{ secrets.FRONTEND_URL }}
             REDIS_ADDR=redis:6379
+            SENTRY_DSN=${{ secrets.SENTRY_DSN }}
             ENVFILE
             echo "${{ secrets.GHCR_READ_TOKEN }}" | docker login ghcr.io -u ${{ github.repository_owner }} --password-stdin
             cd /opt/horsemarketplace

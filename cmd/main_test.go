@@ -31,7 +31,7 @@ func TestInitializeApp(t *testing.T) {
 		Frontend: config.FrontendConfig{
 			URL: "http://localhost:5173",
 		},
-	}).Times(8) // matches initializeApp's 8 configService.GetConfig() call sites (cmd/main.go)
+	}).Times(9) // matches initializeApp's 9 configService.GetConfig() call sites (cmd/main.go)
 
 	ctx := context.Background()
 
@@ -60,7 +60,7 @@ func TestInitializeApp_DBError(t *testing.T) {
 			Port:     "5432",
 			SSLMode:  "disable",
 		},
-	}).Times(1)
+	}).Times(2) // InitSentry's cfg.Env, then the DB factory call
 
 	ctx := context.Background()
 

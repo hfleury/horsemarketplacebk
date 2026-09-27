@@ -30,6 +30,11 @@ func (zs *ZerologService) Log(ctx context.Context, level LogLevel, msg string, f
 		event = event.Interface(k, v)
 	}
 	event.Msg(msg)
+
+	switch level {
+	case PanicLevel, FatalLevel, ErrorLevel:
+		reportToSentry(traceID, function, line, msg, fields)
+	}
 }
 
 func (zs *ZerologService) WithTrace(ctx context.Context, traceID string) context.Context {

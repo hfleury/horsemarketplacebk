@@ -6,6 +6,7 @@ import (
 	"os"
 	"time"
 
+	sentrygin "github.com/getsentry/sentry-go/gin"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -50,6 +51,11 @@ func initializeApp(ctx context.Context, configService config.Configuration, newD
 	// Logging
 	logger := config.NewZerologService()
 	logger.Logger.Debug().Msg("Logger initialized")
+
+	// Error tracking
+	if err := config.InitSentry(os.Getenv("SENTRY_DSN"), configService.GetConfig().Env); err != nil {
+		logger.Logger.Error().Err(err).Msg("Failed to initialize Sentry")
+	}
 
 	// DB PSQL
 	db, err := newDB(configService.GetConfig(), *logger.Logger)
@@ -171,6 +177,7 @@ func initializeApp(ctx context.Context, configService config.Configuration, newD
 		AllowCredentials: true,
 	}))
 	server.Use(middleware.LoggerMiddleware(logger))
+	server.Use(sentrygin.New(sentrygin.Options{Repanic: true}))
 
 	// routes
 	server = router.SetupRouter(server, logger, userService, tokenService, categoryService, mediaService, productService, productHandler, horseAttributeService, geocodingHandler, reportService, messagingService)
