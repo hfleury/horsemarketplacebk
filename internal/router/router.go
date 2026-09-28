@@ -6,6 +6,7 @@ import (
 	"github.com/hfleury/horsemarketplacebk/internal/auth/services"
 	callbackRequestServices "github.com/hfleury/horsemarketplacebk/internal/callbacks/services"
 	categoryServices "github.com/hfleury/horsemarketplacebk/internal/categories/services"
+	favoriteServices "github.com/hfleury/horsemarketplacebk/internal/favorites/services"
 	"github.com/hfleury/horsemarketplacebk/internal/geocoding"
 	horseAttributeServices "github.com/hfleury/horsemarketplacebk/internal/horseattributes/services"
 	"github.com/hfleury/horsemarketplacebk/internal/media"
@@ -16,7 +17,7 @@ import (
 	reportServices "github.com/hfleury/horsemarketplacebk/internal/reports/services"
 )
 
-func SetupRouter(router *gin.Engine, logger config.Logging, userService *services.UserService, tokenService *services.TokenService, categoryService *categoryServices.CategoryService, mediaService *media.MediaService, productService productServices.ProductService, productHandler *productHandlers.ProductHandler, horseAttributeService *horseAttributeServices.HorseAttributeService, geocodingHandler *geocoding.GeocodingHandler, reportService *reportServices.ReportService, messagingService *messagingServices.MessagingService, callbackRequestService *callbackRequestServices.CallbackRequestService) *gin.Engine {
+func SetupRouter(router *gin.Engine, logger config.Logging, userService *services.UserService, tokenService *services.TokenService, categoryService *categoryServices.CategoryService, mediaService *media.MediaService, productService productServices.ProductService, productHandler *productHandlers.ProductHandler, horseAttributeService *horseAttributeServices.HorseAttributeService, geocodingHandler *geocoding.GeocodingHandler, reportService *reportServices.ReportService, messagingService *messagingServices.MessagingService, callbackRequestService *callbackRequestServices.CallbackRequestService, favoriteService *favoriteServices.FavoriteService) *gin.Engine {
 	registerUserRoutes(router, logger, userService, tokenService)
 	registerCategoryRoutes(router, logger, categoryService, tokenService)
 	registerMediaRoutes(router, logger, mediaService, tokenService)
@@ -25,6 +26,7 @@ func SetupRouter(router *gin.Engine, logger config.Logging, userService *service
 	registerReportRoutes(router, logger, reportService, tokenService)
 	registerMessagingRoutes(router, logger, messagingService, tokenService)
 	registerCallbackRequestRoutes(router, logger, callbackRequestService, tokenService)
+	registerFavoriteRoutes(router, logger, favoriteService, tokenService)
 	registerGeocodingRoutes(router, geocodingHandler)
 
 	return router

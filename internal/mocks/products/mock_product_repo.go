@@ -80,6 +80,14 @@ func (m *MockProductRepo) CountFavoritesByProductID(ctx context.Context, product
 	return args.Int(0), args.Error(1)
 }
 
+func (m *MockProductRepo) FindFavoritedByUserID(ctx context.Context, userID string, page, limit int) ([]*models.Product, int, error) {
+	args := m.Called(ctx, userID, page, limit)
+	if args.Get(0) == nil {
+		return nil, args.Int(1), args.Error(2)
+	}
+	return args.Get(0).([]*models.Product), args.Int(1), args.Error(2)
+}
+
 func (m *MockProductRepo) UpdateStatus(ctx context.Context, id string, status models.ProductStatus) error {
 	args := m.Called(ctx, id, status)
 	return args.Error(0)
