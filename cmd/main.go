@@ -13,6 +13,8 @@ import (
 	"github.com/hfleury/horsemarketplacebk/config"
 	authRepos "github.com/hfleury/horsemarketplacebk/internal/auth/repositories"
 	"github.com/hfleury/horsemarketplacebk/internal/auth/services"
+	callbackRequestRepos "github.com/hfleury/horsemarketplacebk/internal/callbacks/repositories"
+	callbackRequestServices "github.com/hfleury/horsemarketplacebk/internal/callbacks/services"
 	categoryRepos "github.com/hfleury/horsemarketplacebk/internal/categories/repositories"
 	categoryServices "github.com/hfleury/horsemarketplacebk/internal/categories/services"
 	"github.com/hfleury/horsemarketplacebk/internal/db"
@@ -79,6 +81,7 @@ func initializeApp(ctx context.Context, configService config.Configuration, newD
 	reportRepo := reportRepos.NewReportRepoPsql(db, logger)
 	conversationRepo := messagingRepos.NewConversationRepoPsql(db, logger)
 	messageRepo := messagingRepos.NewMessageRepoPsql(db, logger)
+	callbackRequestRepo := callbackRequestRepos.NewCallbackRequestRepoPsql(db, logger)
 
 	// Services
 	tokenService := services.NewTokenService(configService.GetConfig(), logger)
@@ -89,6 +92,7 @@ func initializeApp(ctx context.Context, configService config.Configuration, newD
 	horseAttributeService := horseAttributeServices.NewHorseAttributeService(horseAttributeRepo, logger)
 	reportService := reportServices.NewReportService(reportRepo, productRepo, logger)
 	messagingService := messagingServices.NewMessagingService(conversationRepo, messageRepo, productRepo, userRepo, logger, configService.GetConfig().Frontend.URL)
+	callbackRequestService := callbackRequestServices.NewCallbackRequestService(callbackRequestRepo, productRepo, userRepo, logger)
 
 	// Handlers
 	productHandler := productHandlers.NewProductHandler(productService, logger)
@@ -168,6 +172,7 @@ func initializeApp(ctx context.Context, configService config.Configuration, newD
 	}
 	userService.SetEmailSender(sender)
 	messagingService.SetEmailSender(sender)
+	callbackRequestService.SetEmailSender(sender)
 
 	// Create the Gin router and add middleware
 	server := gin.New()
@@ -181,7 +186,7 @@ func initializeApp(ctx context.Context, configService config.Configuration, newD
 	server.Use(sentrygin.New(sentrygin.Options{Repanic: true}))
 
 	// routes
-	server = router.SetupRouter(server, logger, userService, tokenService, categoryService, mediaService, productService, productHandler, horseAttributeService, geocodingHandler, reportService, messagingService)
+	server = router.SetupRouter(server, logger, userService, tokenService, categoryService, mediaService, productService, productHandler, horseAttributeService, geocodingHandler, reportService, messagingService, callbackRequestService)
 
 	return server, nil
 }
