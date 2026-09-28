@@ -1,13 +1,19 @@
 name: CD
 
 on:
-  workflow_run:
-    workflows: ["CI"]
-    types: [completed]
+  release:
+    types: [published]
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
 
 jobs:
+  ci:
+    uses: ./.github/workflows/ci.yml
+
   deploy:
-    if: github.event.workflow_run.conclusion == 'success'
+    needs: ci
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -28,7 +34,7 @@ jobs:
           push: true
           tags: |
             ghcr.io/hfleury/horsemarketplacebk:latest
-            ghcr.io/hfleury/horsemarketplacebk:${{ github.sha }}
+            ghcr.io/hfleury/horsemarketplacebk:${{ github.event.release.tag_name }}
 
       - uses: appleboy/scp-action@v0.1.7
         with:
