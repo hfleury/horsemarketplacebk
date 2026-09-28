@@ -46,7 +46,9 @@ func (m *AuthMiddleware) RequireAuth() gin.HandlerFunc {
 
 		userID, username, email, role, err := m.tokenService.VerifyToken(tokenString)
 		if err != nil {
-			m.logger.Log(c, config.ErrorLevel, "Invalid token", map[string]any{
+			// Warn, not Error: expired/invalid tokens are routine client 401s and
+			// Error-level logs are reported to Sentry.
+			m.logger.Log(c, config.WarnLevel, "Invalid token", map[string]any{
 				"error": err.Error(),
 			})
 			c.JSON(http.StatusUnauthorized, common.APIResponse{
