@@ -27,6 +27,7 @@ type ProductRepository interface {
 	FindSimilar(ctx context.Context, source *models.Product, limit int) ([]*models.Product, error)
 	FindMediaByProductID(ctx context.Context, productID string) ([]models.ProductMedia, error)
 	CountFavoritesByProductID(ctx context.Context, productID string) (int, error)
+	FindFavoritedByUserID(ctx context.Context, userID string, page, limit int) (items []*models.Product, total int, err error)
 	UpdateStatus(ctx context.Context, id string, status models.ProductStatus) error
 	IncrementViewCount(ctx context.Context, id string) error
 	Delete(ctx context.Context, id string) error
@@ -281,6 +282,45 @@ func (r *ProductRepoPsql) CountFavoritesByProductID(ctx context.Context, product
 		return 0, err
 	}
 	return count, nil
+}
+
+// FindFavoritedByUserID lists a user's favorited listings, newest-favorited
+// first, hiding soft-deleted listings but keeping sold/archived ones visible.
+func (r *ProductRepoPsql) FindFavoritedByUserID(ctx context.Context, userID string, page, limit int) ([]*models.Product, int, error) {
+	offset := (page - 1) * limit
+
+	countQuery := `
+		SELECT COUNT(*)
+		FROM catalog.favorites f
+		JOIN catalog.products p ON p.id = f.product_id
+		WHERE f.user_id = $1 AND p.status <> $2
+	`
+	var total int
+	if err := r.psql.QueryRow(ctx, countQuery, userID, models.StatusDeleted).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+
+	dataQuery := selectFullProduct + `
+		JOIN catalog.favorites f ON f.product_id = p.id
+		WHERE f.user_id = $1 AND p.status <> $2
+		ORDER BY f.created_at DESC
+		LIMIT $3 OFFSET $4
+	`
+	rows, err := r.psql.Query(ctx, dataQuery, userID, models.StatusDeleted, limit, offset)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	var products []*models.Product
+	for rows.Next() {
+		p, err := r.scanProduct(ctx, rows)
+		if err != nil {
+			return nil, 0, err
+		}
+		products = append(products, p)
+	}
+	return products, total, nil
 }
 
 func (r *ProductRepoPsql) FindByID(ctx context.Context, id string) (*models.Product, error) {
