@@ -180,6 +180,9 @@ func initializeApp(ctx context.Context, configService config.Configuration, newD
 
 	// Create the Gin router and add middleware
 	server := gin.New()
+	// Lets gin.Context.Value fall back to the request context, where
+	// LoggerMiddleware stores the trace ID that every log line reads.
+	server.ContextWithFallback = true
 	server.Use(cors.New(cors.Config{
 		AllowOrigins:     []string{cfg.Frontend.URL},
 		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
