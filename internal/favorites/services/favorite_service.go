@@ -84,6 +84,15 @@ func (s *FavoriteService) List(ctx context.Context, userID string, page, limit i
 	return &productModels.PaginatedProducts{Items: items, Total: total, Page: page, Limit: limit}, nil
 }
 
+func (s *FavoriteService) ListIDs(ctx context.Context, userID string) ([]uuid.UUID, error) {
+	userUUID, err := uuid.Parse(userID)
+	if err != nil {
+		return nil, err
+	}
+
+	return s.repo.ListProductIDs(ctx, userUUID)
+}
+
 // parseIDs rejects a malformed product ID up front so it surfaces as a 400
 // rather than a Postgres error.
 func parseIDs(productID, userID string) (productUUID, userUUID uuid.UUID, err error) {

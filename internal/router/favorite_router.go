@@ -19,6 +19,7 @@ func registerFavoriteRoutes(router *gin.Engine, logger config.Logging, favoriteS
 	protected := favoriteRoutes.Use(authMiddleware.RequireAuth())
 	{
 		protected.GET("", favoriteHandler.List)
+		protected.GET("/ids", favoriteHandler.ListIDs)
 		protected.POST("/:productId", favoriteHandler.Add)
 		protected.DELETE("/:productId", favoriteHandler.Remove)
 	}
