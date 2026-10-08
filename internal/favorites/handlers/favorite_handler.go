@@ -82,6 +82,22 @@ func (h *FavoriteHandler) List(c *gin.Context) {
 	c.JSON(http.StatusOK, common.NewSuccessResponse(result))
 }
 
+func (h *FavoriteHandler) ListIDs(c *gin.Context) {
+	userIDStr, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, common.NewErrorResponse("Unauthorized"))
+		return
+	}
+
+	productIDs, err := h.service.ListIDs(c.Request.Context(), userIDStr.(string))
+	if err != nil {
+		h.respondWithError(c, err, "Failed to list favorite IDs")
+		return
+	}
+
+	c.JSON(http.StatusOK, common.NewSuccessResponse(productIDs))
+}
+
 func (h *FavoriteHandler) respondWithError(c *gin.Context, err error, logMessage string) {
 	switch err {
 	case services.ErrInvalidProductID:

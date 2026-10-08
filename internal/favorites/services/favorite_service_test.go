@@ -162,3 +162,43 @@ func TestFavoriteService_List_RepoError(t *testing.T) {
 	assert.Nil(t, result)
 	assert.ErrorIs(t, err, repoErr)
 }
+
+func TestFavoriteService_ListIDs_Success(t *testing.T) {
+	service, mockFavoriteRepo, _ := newFavoriteService()
+	userID := uuid.New()
+	productIDs := []uuid.UUID{uuid.New(), uuid.New()}
+
+	mockFavoriteRepo.On("ListProductIDs", mock.Anything, userID).Return(productIDs, nil)
+
+	result, err := service.ListIDs(context.Background(), userID.String())
+
+	assert.NoError(t, err)
+	assert.Equal(t, productIDs, result)
+	mockFavoriteRepo.AssertExpectations(t)
+}
+
+func TestFavoriteService_ListIDs_EmptyReturnsEmptySlice(t *testing.T) {
+	service, mockFavoriteRepo, _ := newFavoriteService()
+	userID := uuid.New()
+
+	mockFavoriteRepo.On("ListProductIDs", mock.Anything, userID).Return([]uuid.UUID{}, nil)
+
+	result, err := service.ListIDs(context.Background(), userID.String())
+
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
+	assert.Empty(t, result)
+}
+
+func TestFavoriteService_ListIDs_RepoError(t *testing.T) {
+	service, mockFavoriteRepo, _ := newFavoriteService()
+	userID := uuid.New()
+	repoErr := errors.New("db down")
+
+	mockFavoriteRepo.On("ListProductIDs", mock.Anything, userID).Return(nil, repoErr)
+
+	result, err := service.ListIDs(context.Background(), userID.String())
+
+	assert.Nil(t, result)
+	assert.ErrorIs(t, err, repoErr)
+}

@@ -6,11 +6,13 @@ import (
 	"github.com/google/uuid"
 	"github.com/hfleury/horsemarketplacebk/config"
 	"github.com/hfleury/horsemarketplacebk/internal/db"
+	productModels "github.com/hfleury/horsemarketplacebk/internal/products/models"
 )
 
 type FavoriteRepository interface {
 	Add(ctx context.Context, userID, productID uuid.UUID) error
 	Remove(ctx context.Context, userID, productID uuid.UUID) error
+	ListProductIDs(ctx context.Context, userID uuid.UUID) ([]uuid.UUID, error)
 }
 
 type FavoriteRepoPsql struct {
@@ -47,4 +49,32 @@ func (r *FavoriteRepoPsql) Remove(ctx context.Context, userID, productID uuid.UU
 		return err
 	}
 	return nil
+}
+
+// ListProductIDs returns the user's favorited product IDs, newest-favorited
+// first, hiding soft-deleted listings like FindFavoritedByUserID does.
+func (r *FavoriteRepoPsql) ListProductIDs(ctx context.Context, userID uuid.UUID) ([]uuid.UUID, error) {
+	query := `
+		SELECT f.product_id
+		FROM catalog.favorites f
+		JOIN catalog.products p ON p.id = f.product_id
+		WHERE f.user_id = $1 AND p.status <> $2
+		ORDER BY f.created_at DESC
+	`
+	rows, err := r.psql.Query(ctx, query, userID, productModels.StatusDeleted)
+	if err != nil {
+		r.logger.Log(ctx, config.ErrorLevel, "Failed to list favorite product IDs", map[string]any{"error": err.Error()})
+		return nil, err
+	}
+	defer rows.Close()
+
+	productIDs := []uuid.UUID{}
+	for rows.Next() {
+		var productID uuid.UUID
+		if err := rows.Scan(&productID); err != nil {
+			return nil, err
+		}
+		productIDs = append(productIDs, productID)
+	}
+	return productIDs, rows.Err()
 }

@@ -20,3 +20,9 @@ func (m *MockFavoriteRepository) Remove(ctx context.Context, userID, productID u
 	args := m.Called(ctx, userID, productID)
 	return args.Error(0)
 }
+
+func (m *MockFavoriteRepository) ListProductIDs(ctx context.Context, userID uuid.UUID) ([]uuid.UUID, error) {
+	args := m.Called(ctx, userID)
+	productIDs, _ := args.Get(0).([]uuid.UUID)
+	return productIDs, args.Error(1)
+}
