@@ -35,6 +35,8 @@ import (
 	reportRepos "github.com/hfleury/horsemarketplacebk/internal/reports/repositories"
 	reportServices "github.com/hfleury/horsemarketplacebk/internal/reports/services"
 	"github.com/hfleury/horsemarketplacebk/internal/router"
+	savedSearchRepos "github.com/hfleury/horsemarketplacebk/internal/savedsearches/repositories"
+	savedSearchServices "github.com/hfleury/horsemarketplacebk/internal/savedsearches/services"
 	"github.com/hfleury/horsemarketplacebk/internal/system"
 	"github.com/hfleury/horsemarketplacebk/internal/tasks"
 	"github.com/hfleury/horsemarketplacebk/internal/worker"
@@ -85,6 +87,7 @@ func initializeApp(ctx context.Context, configService config.Configuration, newD
 	messageRepo := messagingRepos.NewMessageRepoPsql(db, logger)
 	callbackRequestRepo := callbackRequestRepos.NewCallbackRequestRepoPsql(db, logger)
 	favoriteRepo := favoriteRepos.NewFavoriteRepoPsql(db, logger)
+	savedSearchRepo := savedSearchRepos.NewSavedSearchRepoPsql(db, logger)
 
 	// Services
 	tokenService := services.NewTokenService(configService.GetConfig(), logger)
@@ -97,6 +100,7 @@ func initializeApp(ctx context.Context, configService config.Configuration, newD
 	messagingService := messagingServices.NewMessagingService(conversationRepo, messageRepo, productRepo, userRepo, logger, configService.GetConfig().Frontend.URL)
 	callbackRequestService := callbackRequestServices.NewCallbackRequestService(callbackRequestRepo, productRepo, userRepo, logger)
 	favoriteService := favoriteServices.NewFavoriteService(favoriteRepo, productRepo, logger)
+	savedSearchService := savedSearchServices.NewSavedSearchService(savedSearchRepo, logger)
 
 	// Handlers
 	productHandler := productHandlers.NewProductHandler(productService, logger)
@@ -193,7 +197,7 @@ func initializeApp(ctx context.Context, configService config.Configuration, newD
 	server.Use(sentrygin.New(sentrygin.Options{Repanic: true}))
 
 	// routes
-	server = router.SetupRouter(server, logger, userService, tokenService, categoryService, mediaService, productService, productHandler, horseAttributeService, geocodingHandler, reportService, messagingService, callbackRequestService, favoriteService)
+	server = router.SetupRouter(server, logger, userService, tokenService, categoryService, mediaService, productService, productHandler, horseAttributeService, geocodingHandler, reportService, messagingService, callbackRequestService, favoriteService, savedSearchService)
 
 	return server, nil
 }
