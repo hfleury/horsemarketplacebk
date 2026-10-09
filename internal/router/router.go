@@ -15,9 +15,10 @@ import (
 	productHandlers "github.com/hfleury/horsemarketplacebk/internal/products/handlers"
 	productServices "github.com/hfleury/horsemarketplacebk/internal/products/services"
 	reportServices "github.com/hfleury/horsemarketplacebk/internal/reports/services"
+	savedSearchServices "github.com/hfleury/horsemarketplacebk/internal/savedsearches/services"
 )
 
-func SetupRouter(router *gin.Engine, logger config.Logging, userService *services.UserService, tokenService *services.TokenService, categoryService *categoryServices.CategoryService, mediaService *media.MediaService, productService productServices.ProductService, productHandler *productHandlers.ProductHandler, horseAttributeService *horseAttributeServices.HorseAttributeService, geocodingHandler *geocoding.GeocodingHandler, reportService *reportServices.ReportService, messagingService *messagingServices.MessagingService, callbackRequestService *callbackRequestServices.CallbackRequestService, favoriteService *favoriteServices.FavoriteService) *gin.Engine {
+func SetupRouter(router *gin.Engine, logger config.Logging, userService *services.UserService, tokenService *services.TokenService, categoryService *categoryServices.CategoryService, mediaService *media.MediaService, productService productServices.ProductService, productHandler *productHandlers.ProductHandler, horseAttributeService *horseAttributeServices.HorseAttributeService, geocodingHandler *geocoding.GeocodingHandler, reportService *reportServices.ReportService, messagingService *messagingServices.MessagingService, callbackRequestService *callbackRequestServices.CallbackRequestService, favoriteService *favoriteServices.FavoriteService, savedSearchService *savedSearchServices.SavedSearchService) *gin.Engine {
 	registerUserRoutes(router, logger, userService, tokenService)
 	registerCategoryRoutes(router, logger, categoryService, tokenService)
 	registerMediaRoutes(router, logger, mediaService, tokenService)
@@ -27,6 +28,7 @@ func SetupRouter(router *gin.Engine, logger config.Logging, userService *service
 	registerMessagingRoutes(router, logger, messagingService, tokenService)
 	registerCallbackRequestRoutes(router, logger, callbackRequestService, tokenService)
 	registerFavoriteRoutes(router, logger, favoriteService, tokenService)
+	registerSavedSearchRoutes(router, logger, savedSearchService, tokenService)
 	registerGeocodingRoutes(router, geocodingHandler)
 
 	return router
