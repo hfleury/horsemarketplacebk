@@ -35,6 +35,8 @@ services:
   backend:
     image: ghcr.io/hfleury/horsemarketplacebk:latest
     restart: unless-stopped
+    # Covers the 10s HTTP drain + 8s Asynq shutdown before Docker sends SIGKILL.
+    stop_grace_period: 30s
     env_file: .env
     environment:
       PSQL_HOST: postgres

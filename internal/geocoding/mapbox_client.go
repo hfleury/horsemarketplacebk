@@ -6,9 +6,13 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"time"
 )
 
 const mapboxForwardGeocodeURL = "https://api.mapbox.com/search/geocode/v6/forward"
+
+// Product create geocodes synchronously, so a short bound keeps its latency sane.
+const requestTimeout = 5 * time.Second
 
 type MapboxClient struct {
 	APIKey     string
@@ -18,7 +22,7 @@ type MapboxClient struct {
 func NewMapboxClient(apiKey string) *MapboxClient {
 	return &MapboxClient{
 		APIKey:     apiKey,
-		HTTPClient: &http.Client{},
+		HTTPClient: &http.Client{Timeout: requestTimeout},
 	}
 }
 

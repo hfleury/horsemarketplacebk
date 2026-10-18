@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/hfleury/horsemarketplacebk/internal/geocoding"
 	"github.com/stretchr/testify/assert"
@@ -55,4 +56,25 @@ func TestMapboxClient_Geocode_EmptyFeaturesReturnsNotFound(t *testing.T) {
 
 	assert.Nil(t, coordinates)
 	assert.True(t, errors.Is(err, geocoding.ErrLocationNotFound))
+}
+
+func TestNewMapboxClient_SetsRequestTimeout(t *testing.T) {
+	client := geocoding.NewMapboxClient("test-api-key")
+
+	assert.Equal(t, 5*time.Second, client.HTTPClient.Timeout)
+}
+
+func TestMapboxClient_Geocode_TransportTimeoutReturnsUpstreamError(t *testing.T) {
+	client := geocoding.NewMapboxClient("test-api-key")
+	client.HTTPClient = &http.Client{
+		Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+			return nil, context.DeadlineExceeded
+		}),
+	}
+
+	coordinates, err := client.Geocode(context.Background(), "Stockholm, Sweden")
+
+	assert.Nil(t, coordinates)
+	assert.Error(t, err)
+	assert.False(t, errors.Is(err, geocoding.ErrLocationNotFound))
 }

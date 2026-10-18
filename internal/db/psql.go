@@ -4,10 +4,21 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"time"
 
 	"github.com/hfleury/horsemarketplacebk/config"
 	_ "github.com/lib/pq"
 	"github.com/rs/zerolog"
+)
+
+// Sized for one backend container (HTTP plus 10 Asynq workers) against
+// Postgres's default max_connections of 100. Idle equals open to avoid
+// connection churn under load.
+const (
+	maxOpenConnections    = 25
+	maxIdleConnections    = 25
+	connectionMaxLifetime = 30 * time.Minute
+	connectionMaxIdleTime = 5 * time.Minute
 )
 
 type PsqlDB struct {
@@ -25,18 +36,24 @@ func NewPsqlDB(config *config.AllConfiguration, logger zerolog.Logger) (*PsqlDB,
 		config.Psql.Port,
 	)
 
-	fmt.Println("Connecting to database with connection string:", connStr)
-
 	db, err := sql.Open("postgres", connStr)
 	if err != nil {
-		logger.Error().Err(err).Msg("Error pinging database")
+		logger.Error().Err(err).Msg("Error opening database")
 		return nil, err
 	}
+	configureConnectionPool(db)
 
 	return &PsqlDB{
 		Conn: db,
 		Logg: logger,
 	}, nil
+}
+
+func configureConnectionPool(conn *sql.DB) {
+	conn.SetMaxOpenConns(maxOpenConnections)
+	conn.SetMaxIdleConns(maxIdleConnections)
+	conn.SetConnMaxLifetime(connectionMaxLifetime)
+	conn.SetConnMaxIdleTime(connectionMaxIdleTime)
 }
 
 func (p *PsqlDB) BeginTransaction(ctx context.Context) (*sql.Tx, error) {
