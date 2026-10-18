@@ -2,8 +2,12 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	sentrygin "github.com/getsentry/sentry-go/gin"
@@ -44,13 +48,49 @@ import (
 	"github.com/rs/zerolog"
 )
 
+const (
+	serverAddress           = ":8080"
+	serverReadHeaderTimeout = 10 * time.Second
+	serverReadTimeout       = 60 * time.Second
+	serverWriteTimeout      = 90 * time.Second
+	serverIdleTimeout       = 120 * time.Second
+	shutdownDrainTimeout    = 10 * time.Second
+	emailSendTimeout        = 10 * time.Second
+)
+
 type dbFactory func(config *config.AllConfiguration, logger zerolog.Logger) (*db.PsqlDB, error)
 
 type Server interface {
-	Run(addr ...string) error
+	ListenAndServe() error
+	Shutdown(ctx context.Context) error
 }
 
-func initializeApp(ctx context.Context, configService config.Configuration, newDB dbFactory) (Server, error) {
+func newHTTPServer(handler http.Handler) *http.Server {
+	return &http.Server{
+		Addr:              serverAddress,
+		Handler:           handler,
+		ReadHeaderTimeout: serverReadHeaderTimeout,
+		ReadTimeout:       serverReadTimeout,
+		WriteTimeout:      serverWriteTimeout,
+		IdleTimeout:       serverIdleTimeout,
+	}
+}
+
+// newResourceReleaser returns the func that stops background work once HTTP
+// has drained, so no request can still enqueue tasks or touch the DB.
+func newResourceReleaser(asynqServer *asynq.Server, asynqClient *asynq.Client, database *db.PsqlDB, logger *config.ZerologService) func() {
+	return func() {
+		logger.Logger.Info().Msg("Stopping Asynq worker")
+		asynqServer.Shutdown()
+		if err := asynqClient.Close(); err != nil {
+			logger.Logger.Error().Err(err).Msg("Error closing Asynq client")
+		}
+		logger.Logger.Info().Msg("Closing database connection pool")
+		_ = database.Close() // Close logs its own error
+	}
+}
+
+func initializeApp(ctx context.Context, configService config.Configuration, newDB dbFactory) (Server, func(), error) {
 	// Configuration
 	configService.LoadConfiguration()
 
@@ -67,7 +107,7 @@ func initializeApp(ctx context.Context, configService config.Configuration, newD
 	db, err := newDB(configService.GetConfig(), *logger.Logger)
 	if err != nil {
 		logger.Logger.Error().Err(err).Msg("Error initialize the Postgres DB")
-		return nil, err
+		return nil, nil, err
 	}
 
 	// Add the traceID to the logger
@@ -119,7 +159,6 @@ func initializeApp(ctx context.Context, configService config.Configuration, newD
 
 	redisOpt := asynq.RedisClientOpt{Addr: redisAddr}
 	asynqClient := asynq.NewClient(redisOpt)
-	defer asynqClient.Close()
 
 	mediaRepo := media.NewPostgresMediaRepository(db.Conn)
 	mediaService, err := media.NewMediaService(mediaRepo, asynqClient, configService.GetConfig())
@@ -148,11 +187,9 @@ func initializeApp(ctx context.Context, configService config.Configuration, newD
 		mux.HandleFunc(tasks.TypeProcessImage, processor.HandleProcessImageTask)
 	}
 
-	go func() {
-		if err := asynqServer.Run(mux); err != nil {
-			logger.Logger.Fatal().Err(err).Msg("could not run server")
-		}
-	}()
+	if err := asynqServer.Start(mux); err != nil {
+		logger.Logger.Fatal().Err(err).Msg("could not start Asynq worker server")
+	}
 
 	// Email verification repository
 	emailVerifRepo := authRepos.NewEmailVerificationRepoPsql(db, logger)
@@ -165,14 +202,14 @@ func initializeApp(ctx context.Context, configService config.Configuration, newD
 		// parse port
 		port := 25
 		fmt.Sscanf(cfg.SMTP.Port, "%d", &port)
-		sender = email.NewSMTPSender(cfg.SMTP.Host, port, cfg.SMTP.Username, cfg.SMTP.Password, cfg.SMTP.From)
+		sender = email.NewSMTPSender(cfg.SMTP.Host, port, cfg.SMTP.Username, cfg.SMTP.Password, cfg.SMTP.From, emailSendTimeout)
 	} else {
 		// fallback to Mailgun if configured via env (keeps previous behavior)
 		mailgunDomain := os.Getenv("MAILGUN_DOMAIN")
 		mailgunAPIKey := os.Getenv("MAILGUN_API_KEY")
 		mailFrom := os.Getenv("MAIL_FROM")
 		if mailgunDomain != "" && mailgunAPIKey != "" && mailFrom != "" {
-			sender = email.NewMailgunSender(mailgunDomain, mailgunAPIKey, mailFrom, 10*time.Second)
+			sender = email.NewMailgunSender(mailgunDomain, mailgunAPIKey, mailFrom, emailSendTimeout)
 		} else {
 			// use centralized mock sender
 			sender = mockemail.NewMockSender()
@@ -199,28 +236,47 @@ func initializeApp(ctx context.Context, configService config.Configuration, newD
 	// routes
 	server = router.SetupRouter(server, logger, userService, tokenService, categoryService, mediaService, productService, productHandler, horseAttributeService, geocodingHandler, reportService, messagingService, callbackRequestService, favoriteService, savedSearchService)
 
-	return server, nil
+	return newHTTPServer(server), newResourceReleaser(asynqServer, asynqClient, db, logger), nil
 }
 
 type Launcher struct {
-	AppInitializer func(context.Context, config.Configuration, dbFactory) (Server, error)
+	AppInitializer func(context.Context, config.Configuration, dbFactory) (Server, func(), error)
 }
 
 func (l *Launcher) Run(ctx context.Context, configService config.Configuration, newDB dbFactory) error {
-	server, err := l.AppInitializer(ctx, configService, newDB)
+	server, releaseResources, err := l.AppInitializer(ctx, configService, newDB)
 	if err != nil {
 		return err
 	}
+	defer releaseResources()
 
-	if err := server.Run(":8080"); err != nil {
+	return serveUntilCancelled(ctx, server)
+}
+
+// serveUntilCancelled serves until the server fails or ctx is cancelled, in
+// which case in-flight requests get shutdownDrainTimeout to finish.
+func serveUntilCancelled(ctx context.Context, server Server) error {
+	serveResult := make(chan error, 1)
+	go func() {
+		serveResult <- server.ListenAndServe()
+	}()
+
+	select {
+	case err := <-serveResult:
+		if errors.Is(err, http.ErrServerClosed) {
+			return nil
+		}
 		return err
+	case <-ctx.Done():
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownDrainTimeout)
+		defer cancel()
+		return server.Shutdown(shutdownCtx)
 	}
-
-	return nil
 }
 
 func main() {
-	ctx := context.Background()
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
 	configService := config.NewVipperService()
 
 	launcher := &Launcher{

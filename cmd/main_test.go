@@ -3,7 +3,9 @@ package main
 import (
 	"context"
 	"errors"
+	"net/http"
 	"testing"
+	"time"
 
 	"github.com/golang/mock/gomock"
 	"github.com/hfleury/horsemarketplacebk/config"
@@ -39,10 +41,12 @@ func TestInitializeApp(t *testing.T) {
 		return &db.PsqlDB{}, nil
 	}
 
-	server, err := initializeApp(ctx, mockConfig, mockDBFactory)
+	// releaseResources is not called: the zero-value PsqlDB has a nil Conn.
+	server, releaseResources, err := initializeApp(ctx, mockConfig, mockDBFactory)
 
 	assert.NoError(t, err)
 	assert.NotNil(t, server)
+	assert.NotNil(t, releaseResources)
 }
 
 func TestInitializeApp_DBError(t *testing.T) {
@@ -68,68 +72,65 @@ func TestInitializeApp_DBError(t *testing.T) {
 		return nil, errors.New("db error")
 	}
 
-	server, err := initializeApp(ctx, mockConfig, mockDBFactory)
+	server, releaseResources, err := initializeApp(ctx, mockConfig, mockDBFactory)
 
 	assert.Error(t, err)
 	assert.Nil(t, server)
+	assert.Nil(t, releaseResources)
 	assert.Equal(t, "db error", err.Error())
 }
 
 // MockServer is a mock of Server interface
 type MockServer struct {
-	RunFunc func(addr ...string) error
+	ListenAndServeFunc func() error
+	ShutdownFunc       func(ctx context.Context) error
 }
 
-func (m *MockServer) Run(addr ...string) error {
-	return m.RunFunc(addr...)
+func (m *MockServer) ListenAndServe() error {
+	return m.ListenAndServeFunc()
+}
+
+func (m *MockServer) Shutdown(ctx context.Context) error {
+	return m.ShutdownFunc(ctx)
+}
+
+func noopDBFactory(config *config.AllConfiguration, logger zerolog.Logger) (*db.PsqlDB, error) {
+	return &db.PsqlDB{}, nil
+}
+
+func launcherFor(server Server, releaseResources func()) *Launcher {
+	return &Launcher{
+		AppInitializer: func(ctx context.Context, configService config.Configuration, newDB dbFactory) (Server, func(), error) {
+			return server, releaseResources, nil
+		},
+	}
 }
 
 func TestLauncher_Run(t *testing.T) {
 	ctrl := gomock.NewController(t)
-
 	mockConfig := mockconfig.NewMockConfiguration(ctrl)
-
-	// No expectations on mockConfig because run() just passes it to initializeAppFunc
-	// and our mock initializeAppFunc doesn't use it.
-
-	ctx := context.Background()
-
-	mockDBFactory := func(config *config.AllConfiguration, logger zerolog.Logger) (*db.PsqlDB, error) {
-		return &db.PsqlDB{}, nil
-	}
-
+	released := false
 	mockServer := &MockServer{
-		RunFunc: func(addr ...string) error {
-			return nil
-		},
+		ListenAndServeFunc: func() error { return http.ErrServerClosed },
 	}
 
-	launcher := &Launcher{
-		AppInitializer: func(ctx context.Context, configService config.Configuration, newDB dbFactory) (Server, error) {
-			return mockServer, nil
-		},
-	}
-
-	err := launcher.Run(ctx, mockConfig, mockDBFactory)
+	err := launcherFor(mockServer, func() { released = true }).Run(context.Background(), mockConfig, noopDBFactory)
 
 	assert.NoError(t, err)
+	assert.True(t, released)
 }
 
 func TestLauncher_Run_InitializeAppError(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mockConfig := mockconfig.NewMockConfiguration(ctrl)
-	ctx := context.Background()
-	mockDBFactory := func(config *config.AllConfiguration, logger zerolog.Logger) (*db.PsqlDB, error) {
-		return &db.PsqlDB{}, nil
-	}
 
 	launcher := &Launcher{
-		AppInitializer: func(ctx context.Context, configService config.Configuration, newDB dbFactory) (Server, error) {
-			return nil, errors.New("init error")
+		AppInitializer: func(ctx context.Context, configService config.Configuration, newDB dbFactory) (Server, func(), error) {
+			return nil, nil, errors.New("init error")
 		},
 	}
 
-	err := launcher.Run(ctx, mockConfig, mockDBFactory)
+	err := launcher.Run(context.Background(), mockConfig, noopDBFactory)
 
 	assert.Error(t, err)
 	assert.Equal(t, "init error", err.Error())
@@ -138,25 +139,73 @@ func TestLauncher_Run_InitializeAppError(t *testing.T) {
 func TestLauncher_Run_ServerRunError(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mockConfig := mockconfig.NewMockConfiguration(ctrl)
-	ctx := context.Background()
-	mockDBFactory := func(config *config.AllConfiguration, logger zerolog.Logger) (*db.PsqlDB, error) {
-		return &db.PsqlDB{}, nil
-	}
-
+	released := false
 	mockServer := &MockServer{
-		RunFunc: func(addr ...string) error {
-			return errors.New("run error")
-		},
+		ListenAndServeFunc: func() error { return errors.New("run error") },
 	}
 
-	launcher := &Launcher{
-		AppInitializer: func(ctx context.Context, configService config.Configuration, newDB dbFactory) (Server, error) {
-			return mockServer, nil
-		},
-	}
-
-	err := launcher.Run(ctx, mockConfig, mockDBFactory)
+	err := launcherFor(mockServer, func() { released = true }).Run(context.Background(), mockConfig, noopDBFactory)
 
 	assert.Error(t, err)
 	assert.Equal(t, "run error", err.Error())
+	assert.True(t, released)
+}
+
+func TestLauncher_Run_ShutsDownWhenContextCancelled(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mockConfig := mockconfig.NewMockConfiguration(ctrl)
+	var events []string
+	serverClosed := make(chan struct{})
+	mockServer := &MockServer{
+		ListenAndServeFunc: func() error {
+			<-serverClosed
+			return http.ErrServerClosed
+		},
+		ShutdownFunc: func(ctx context.Context) error {
+			events = append(events, "shutdown")
+			close(serverClosed)
+			return nil
+		},
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	err := launcherFor(mockServer, func() { events = append(events, "release") }).Run(ctx, mockConfig, noopDBFactory)
+
+	assert.NoError(t, err)
+	assert.Equal(t, []string{"shutdown", "release"}, events)
+}
+
+func TestLauncher_Run_ReturnsShutdownError(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mockConfig := mockconfig.NewMockConfiguration(ctrl)
+	released := false
+	serverBlocked := make(chan struct{})
+	t.Cleanup(func() { close(serverBlocked) })
+	mockServer := &MockServer{
+		ListenAndServeFunc: func() error {
+			<-serverBlocked
+			return nil
+		},
+		ShutdownFunc: func(ctx context.Context) error {
+			return errors.New("shutdown error")
+		},
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	err := launcherFor(mockServer, func() { released = true }).Run(ctx, mockConfig, noopDBFactory)
+
+	assert.EqualError(t, err, "shutdown error")
+	assert.True(t, released)
+}
+
+func TestNewHTTPServer_SetsTimeouts(t *testing.T) {
+	server := newHTTPServer(http.NewServeMux())
+
+	assert.Equal(t, ":8080", server.Addr)
+	assert.Equal(t, 10*time.Second, server.ReadHeaderTimeout)
+	assert.Equal(t, 60*time.Second, server.ReadTimeout)
+	assert.Equal(t, 90*time.Second, server.WriteTimeout)
+	assert.Equal(t, 120*time.Second, server.IdleTimeout)
 }
