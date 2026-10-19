@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	productmodels "github.com/hfleury/horsemarketplacebk/internal/products/models"
 )
 
 // SearchCriteria uses the same keys as the GET /api/v1/products query
@@ -25,6 +26,39 @@ type SearchCriteria struct {
 	RadiusKm   *float64 `json:"radius_km,omitempty"`
 }
 
+// ToProductFilters maps the criteria onto the arguments of the product
+// search, so a saved search matches exactly what browse would return.
+func (c SearchCriteria) ToProductFilters() (categoryID, query string, horseFilter *productmodels.HorseFilter, locationFilter *productmodels.LocationFilter) {
+	return valueOrEmpty(c.CategoryID), valueOrEmpty(c.Query), c.horseFilter(), c.locationFilter()
+}
+
+func (c SearchCriteria) horseFilter() *productmodels.HorseFilter {
+	filter := productmodels.HorseFilter{
+		Breed: c.Breed, Gender: c.Gender, Discipline: c.Discipline,
+		MinAge: c.MinAge, MaxAge: c.MaxAge,
+		MinHeight: c.MinHeight, MaxHeight: c.MaxHeight,
+		MinPrice: c.MinPrice, MaxPrice: c.MaxPrice,
+	}
+	if filter == (productmodels.HorseFilter{}) {
+		return nil
+	}
+	return &filter
+}
+
+func (c SearchCriteria) locationFilter() *productmodels.LocationFilter {
+	if c.Lat == nil || c.Lng == nil || c.RadiusKm == nil {
+		return nil
+	}
+	return &productmodels.LocationFilter{Lat: *c.Lat, Lng: *c.Lng, RadiusKm: *c.RadiusKm}
+}
+
+func valueOrEmpty(value *string) string {
+	if value == nil {
+		return ""
+	}
+	return *value
+}
+
 type SavedSearch struct {
 	ID             uuid.UUID      `json:"id"`
 	UserID         uuid.UUID      `json:"user_id"`
@@ -43,4 +77,12 @@ type SavedSearchRequest struct {
 	Criteria      *SearchCriteria `json:"criteria" binding:"required"`
 	LocationLabel *string         `json:"location_label"`
 	AlertsEnabled *bool           `json:"alerts_enabled"`
+}
+
+// AlertSubscription is an alert-enabled saved search together with the
+// contact details of its owner.
+type AlertSubscription struct {
+	Search   SavedSearch
+	Email    string
+	Username string
 }

@@ -129,6 +129,8 @@ func initializeApp(ctx context.Context, configService config.Configuration, newD
 	favoriteRepo := favoriteRepos.NewFavoriteRepoPsql(db, logger)
 	savedSearchRepo := savedSearchRepos.NewSavedSearchRepoPsql(db, logger)
 
+	frontendURL := configService.GetConfig().Frontend.URL
+
 	// Services
 	tokenService := services.NewTokenService(configService.GetConfig(), logger)
 	userService := services.NewUserService(userRepo, logger, tokenService, sessionRepo)
@@ -137,7 +139,7 @@ func initializeApp(ctx context.Context, configService config.Configuration, newD
 	productService := productServices.NewProductService(productRepo, systemSettingsRepo, logger, mapboxClient)
 	horseAttributeService := horseAttributeServices.NewHorseAttributeService(horseAttributeRepo, logger)
 	reportService := reportServices.NewReportService(reportRepo, productRepo, logger)
-	messagingService := messagingServices.NewMessagingService(conversationRepo, messageRepo, productRepo, userRepo, logger, configService.GetConfig().Frontend.URL)
+	messagingService := messagingServices.NewMessagingService(conversationRepo, messageRepo, productRepo, userRepo, logger, frontendURL)
 	callbackRequestService := callbackRequestServices.NewCallbackRequestService(callbackRequestRepo, productRepo, userRepo, logger)
 	favoriteService := favoriteServices.NewFavoriteService(favoriteRepo, productRepo, logger)
 	savedSearchService := savedSearchServices.NewSavedSearchService(savedSearchRepo, logger)
@@ -159,12 +161,16 @@ func initializeApp(ctx context.Context, configService config.Configuration, newD
 
 	redisOpt := asynq.RedisClientOpt{Addr: redisAddr}
 	asynqClient := asynq.NewClient(redisOpt)
+	productService.SetPublishNotifier(tasks.NewSavedSearchMatchProducer(asynqClient))
 
 	mediaRepo := media.NewPostgresMediaRepository(db.Conn)
 	mediaService, err := media.NewMediaService(mediaRepo, asynqClient, configService.GetConfig())
 	if err != nil {
 		logger.Logger.Error().Err(err).Msg("Failed to initialize media service")
 	}
+
+	cfg := configService.GetConfig()
+	sender := newEmailSender(cfg)
 
 	// Start Asynq Worker Server
 	asynqServer := asynq.NewServer(
@@ -186,6 +192,8 @@ func initializeApp(ctx context.Context, configService config.Configuration, newD
 	} else {
 		mux.HandleFunc(tasks.TypeProcessImage, processor.HandleProcessImageTask)
 	}
+	savedSearchAlertService := savedSearchServices.NewSavedSearchAlertService(savedSearchRepo, productRepo, sender, frontendURL, logger)
+	mux.HandleFunc(tasks.TypeMatchSavedSearches, worker.NewSavedSearchAlertHandler(savedSearchAlertService).HandleMatchSavedSearchesTask)
 
 	if err := asynqServer.Start(mux); err != nil {
 		logger.Logger.Fatal().Err(err).Msg("could not start Asynq worker server")
@@ -194,27 +202,7 @@ func initializeApp(ctx context.Context, configService config.Configuration, newD
 	// Email verification repository
 	emailVerifRepo := authRepos.NewEmailVerificationRepoPsql(db, logger)
 	userService.SetEmailVerificationRepo(emailVerifRepo)
-	// Email sender selection (in order): SMTP config, Mailgun env, Mock (dev)
-	cfg := configService.GetConfig()
 	userService.SetBackendURL(cfg.Backend.URL)
-	var sender email.Sender
-	if cfg.SMTP.Host != "" && cfg.SMTP.Port != "" && cfg.SMTP.From != "" {
-		// parse port
-		port := 25
-		fmt.Sscanf(cfg.SMTP.Port, "%d", &port)
-		sender = email.NewSMTPSender(cfg.SMTP.Host, port, cfg.SMTP.Username, cfg.SMTP.Password, cfg.SMTP.From, emailSendTimeout)
-	} else {
-		// fallback to Mailgun if configured via env (keeps previous behavior)
-		mailgunDomain := os.Getenv("MAILGUN_DOMAIN")
-		mailgunAPIKey := os.Getenv("MAILGUN_API_KEY")
-		mailFrom := os.Getenv("MAIL_FROM")
-		if mailgunDomain != "" && mailgunAPIKey != "" && mailFrom != "" {
-			sender = email.NewMailgunSender(mailgunDomain, mailgunAPIKey, mailFrom, emailSendTimeout)
-		} else {
-			// use centralized mock sender
-			sender = mockemail.NewMockSender()
-		}
-	}
 	userService.SetEmailSender(sender)
 	messagingService.SetEmailSender(sender)
 	callbackRequestService.SetEmailSender(sender)
@@ -237,6 +225,25 @@ func initializeApp(ctx context.Context, configService config.Configuration, newD
 	server = router.SetupRouter(server, logger, userService, tokenService, categoryService, mediaService, productService, productHandler, horseAttributeService, geocodingHandler, reportService, messagingService, callbackRequestService, favoriteService, savedSearchService)
 
 	return newHTTPServer(server), newResourceReleaser(asynqServer, asynqClient, db, logger), nil
+}
+
+// newEmailSender picks the sender in order: SMTP config, Mailgun env, then
+// an in-memory mock for local development.
+func newEmailSender(cfg *config.AllConfiguration) email.Sender {
+	if cfg.SMTP.Host != "" && cfg.SMTP.Port != "" && cfg.SMTP.From != "" {
+		port := 25
+		fmt.Sscanf(cfg.SMTP.Port, "%d", &port)
+		return email.NewSMTPSender(cfg.SMTP.Host, port, cfg.SMTP.Username, cfg.SMTP.Password, cfg.SMTP.From, emailSendTimeout)
+	}
+
+	mailgunDomain := os.Getenv("MAILGUN_DOMAIN")
+	mailgunAPIKey := os.Getenv("MAILGUN_API_KEY")
+	mailFrom := os.Getenv("MAIL_FROM")
+	if mailgunDomain != "" && mailgunAPIKey != "" && mailFrom != "" {
+		return email.NewMailgunSender(mailgunDomain, mailgunAPIKey, mailFrom, emailSendTimeout)
+	}
+
+	return mockemail.NewMockSender()
 }
 
 type Launcher struct {
