@@ -5,10 +5,12 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/golang/mock/gomock"
 	"github.com/google/uuid"
 	"github.com/hfleury/horsemarketplacebk/config"
 	categoriesmodels "github.com/hfleury/horsemarketplacebk/internal/categories/models"
 	media "github.com/hfleury/horsemarketplacebk/internal/media"
+	mockconfig "github.com/hfleury/horsemarketplacebk/internal/mocks/config"
 	mockGeocoding "github.com/hfleury/horsemarketplacebk/internal/mocks/geocoding"
 	mockProducts "github.com/hfleury/horsemarketplacebk/internal/mocks/products"
 	mockSystem "github.com/hfleury/horsemarketplacebk/internal/mocks/system"
@@ -413,4 +415,196 @@ func TestFindSimilar_RepoError_Propagates(t *testing.T) {
 	assert.Error(t, err)
 	assert.Nil(t, result)
 	mockRepo.AssertExpectations(t)
+}
+
+type publishTestFixture struct {
+	service  *services.ProductServiceImp
+	repo     *mockProducts.MockProductRepo
+	settings *mockSystem.MockSettingsRepo
+	notifier *mockProducts.MockListingPublishedNotifier
+}
+
+func newPublishTestFixture(logger config.Logging) publishTestFixture {
+	fixture := publishTestFixture{
+		repo:     new(mockProducts.MockProductRepo),
+		settings: new(mockSystem.MockSettingsRepo),
+		notifier: new(mockProducts.MockListingPublishedNotifier),
+	}
+	fixture.service = services.NewProductService(fixture.repo, fixture.settings, logger, new(mockGeocoding.MockGeocodingClient))
+	fixture.service.SetPublishNotifier(fixture.notifier)
+	return fixture
+}
+
+// expectCreateEchoesProduct mirrors the real repository, which returns the
+// product it was given after saving it.
+func (f publishTestFixture) expectCreateEchoesProduct(product *models.Product) {
+	f.repo.On("Create", mock.Anything, product).Return(product, nil)
+}
+
+func (f publishTestFixture) expectExistingProduct(product *models.Product) {
+	f.repo.On("FindByID", mock.Anything, product.ID.String()).Return(product, nil)
+}
+
+func TestCreateProduct_PublishedWithoutApproval_NotifiesOnce(t *testing.T) {
+	fixture := newPublishTestFixture(config.NewZerologService())
+	fixture.settings.On("IsProductApprovalRequired", mock.Anything).Return(false, nil)
+	product := &models.Product{ID: uuid.New(), Status: models.StatusPublished}
+	fixture.expectCreateEchoesProduct(product)
+	fixture.notifier.On("NotifyListingPublished", mock.Anything, mock.Anything).Return(nil)
+
+	created, err := fixture.service.Create(context.Background(), product)
+
+	assert.NoError(t, err)
+	fixture.notifier.AssertCalled(t, "NotifyListingPublished", mock.Anything, created.ID.String())
+	fixture.notifier.AssertNumberOfCalls(t, "NotifyListingPublished", 1)
+}
+
+func TestCreateProduct_NotPublished_DoesNotNotify(t *testing.T) {
+	tests := []struct {
+		name             string
+		requestedStatus  models.ProductStatus
+		approvalRequired bool
+		approvalErr      error
+	}{
+		{name: "approval required makes it pending", requestedStatus: models.StatusPublished, approvalRequired: true},
+		{name: "draft request", requestedStatus: models.StatusDraft},
+		{name: "approval setting unreadable makes it pending", requestedStatus: models.StatusPublished, approvalErr: errors.New("db error")},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fixture := newPublishTestFixture(config.NewZerologService())
+			fixture.settings.On("IsProductApprovalRequired", mock.Anything).Return(tt.approvalRequired, tt.approvalErr)
+			product := &models.Product{ID: uuid.New(), Status: tt.requestedStatus}
+			fixture.expectCreateEchoesProduct(product)
+
+			created, err := fixture.service.Create(context.Background(), product)
+
+			assert.NoError(t, err)
+			assert.NotEqual(t, models.StatusPublished, created.Status)
+			fixture.notifier.AssertNotCalled(t, "NotifyListingPublished", mock.Anything, mock.Anything)
+		})
+	}
+}
+
+func TestCreateProduct_RepoError_ReturnsErrorWithoutNotifying(t *testing.T) {
+	fixture := newPublishTestFixture(config.NewZerologService())
+	fixture.settings.On("IsProductApprovalRequired", mock.Anything).Return(false, nil)
+	fixture.repo.On("Create", mock.Anything, mock.Anything).Return(nil, errors.New("db error"))
+
+	created, err := fixture.service.Create(context.Background(), &models.Product{Status: models.StatusPublished})
+
+	assert.Error(t, err)
+	assert.Nil(t, created)
+	fixture.notifier.AssertNotCalled(t, "NotifyListingPublished", mock.Anything, mock.Anything)
+}
+
+func TestCreateProduct_WithoutNotifier_PublishesNormally(t *testing.T) {
+	mockRepo := new(mockProducts.MockProductRepo)
+	mockSettings := new(mockSystem.MockSettingsRepo)
+	service := services.NewProductService(mockRepo, mockSettings, config.NewZerologService(), new(mockGeocoding.MockGeocodingClient))
+	mockSettings.On("IsProductApprovalRequired", mock.Anything).Return(false, nil)
+	mockRepo.On("Create", mock.Anything, mock.Anything).Return(&models.Product{Status: models.StatusPublished}, nil)
+
+	created, err := service.Create(context.Background(), &models.Product{Status: models.StatusPublished})
+
+	assert.NoError(t, err)
+	assert.Equal(t, models.StatusPublished, created.Status)
+}
+
+func TestCreateProduct_NotifierError_StillSucceedsAndLogsError(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	logger := mockconfig.NewMockLogging(ctrl)
+	logger.EXPECT().Log(gomock.Any(), config.ErrorLevel, "Failed to notify that a listing was published", gomock.Any()).Times(1)
+	fixture := newPublishTestFixture(logger)
+	fixture.settings.On("IsProductApprovalRequired", mock.Anything).Return(false, nil)
+	product := &models.Product{ID: uuid.New(), Status: models.StatusPublished}
+	fixture.expectCreateEchoesProduct(product)
+	fixture.notifier.On("NotifyListingPublished", mock.Anything, mock.Anything).Return(errors.New("redis down"))
+
+	created, err := fixture.service.Create(context.Background(), product)
+
+	assert.NoError(t, err)
+	assert.Equal(t, models.StatusPublished, created.Status)
+}
+
+func TestUpdateStatus_TransitionIntoPublished_Notifies(t *testing.T) {
+	tests := []struct {
+		name           string
+		previousStatus models.ProductStatus
+		isAdmin        bool
+	}{
+		{name: "admin approves a pending listing", previousStatus: models.StatusPendingApproval, isAdmin: true},
+		{name: "owner publishes a draft with approval off", previousStatus: models.StatusDraft},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fixture := newPublishTestFixture(config.NewZerologService())
+			product := &models.Product{ID: uuid.New(), UserID: uuid.New(), Status: tt.previousStatus}
+			fixture.expectExistingProduct(product)
+			fixture.settings.On("IsProductApprovalRequired", mock.Anything).Return(false, nil)
+			fixture.repo.On("UpdateStatus", mock.Anything, product.ID.String(), models.StatusPublished).Return(nil)
+			fixture.notifier.On("NotifyListingPublished", mock.Anything, product.ID.String()).Return(nil)
+
+			err := fixture.service.UpdateStatus(context.Background(), product.ID.String(), models.StatusPublished, product.UserID.String(), tt.isAdmin)
+
+			assert.NoError(t, err)
+			fixture.notifier.AssertNumberOfCalls(t, "NotifyListingPublished", 1)
+		})
+	}
+}
+
+func TestUpdateStatus_NoTransitionIntoPublished_DoesNotNotify(t *testing.T) {
+	tests := []struct {
+		name             string
+		previousStatus   models.ProductStatus
+		requestedStatus  models.ProductStatus
+		savedStatus      models.ProductStatus
+		isAdmin          bool
+		approvalRequired bool
+	}{
+		{name: "admin republishes a published listing", previousStatus: models.StatusPublished, requestedStatus: models.StatusPublished, savedStatus: models.StatusPublished, isAdmin: true},
+		{name: "owner publish with approval on goes to pending", previousStatus: models.StatusDraft, requestedStatus: models.StatusPublished, savedStatus: models.StatusPendingApproval, approvalRequired: true},
+		{name: "owner marks a published listing sold", previousStatus: models.StatusPublished, requestedStatus: models.StatusSold, savedStatus: models.StatusSold},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fixture := newPublishTestFixture(config.NewZerologService())
+			product := &models.Product{ID: uuid.New(), UserID: uuid.New(), Status: tt.previousStatus}
+			fixture.expectExistingProduct(product)
+			fixture.settings.On("IsProductApprovalRequired", mock.Anything).Return(tt.approvalRequired, nil)
+			fixture.repo.On("UpdateStatus", mock.Anything, product.ID.String(), tt.savedStatus).Return(nil)
+
+			err := fixture.service.UpdateStatus(context.Background(), product.ID.String(), tt.requestedStatus, product.UserID.String(), tt.isAdmin)
+
+			assert.NoError(t, err)
+			fixture.repo.AssertExpectations(t)
+			fixture.notifier.AssertNotCalled(t, "NotifyListingPublished", mock.Anything, mock.Anything)
+		})
+	}
+}
+
+func TestUpdateStatus_RepoError_DoesNotNotify(t *testing.T) {
+	fixture := newPublishTestFixture(config.NewZerologService())
+	product := &models.Product{ID: uuid.New(), UserID: uuid.New(), Status: models.StatusPendingApproval}
+	fixture.expectExistingProduct(product)
+	fixture.repo.On("UpdateStatus", mock.Anything, product.ID.String(), models.StatusPublished).Return(errors.New("db error"))
+
+	err := fixture.service.UpdateStatus(context.Background(), product.ID.String(), models.StatusPublished, "", true)
+
+	assert.Error(t, err)
+	fixture.notifier.AssertNotCalled(t, "NotifyListingPublished", mock.Anything, mock.Anything)
+}
+
+func TestUpdateStatus_Unauthorized_DoesNotNotify(t *testing.T) {
+	fixture := newPublishTestFixture(config.NewZerologService())
+	product := &models.Product{ID: uuid.New(), UserID: uuid.New(), Status: models.StatusDraft}
+	fixture.expectExistingProduct(product)
+
+	err := fixture.service.UpdateStatus(context.Background(), product.ID.String(), models.StatusPublished, uuid.New().String(), false)
+
+	assert.Equal(t, services.ErrUnauthorized, err)
+	fixture.notifier.AssertNotCalled(t, "NotifyListingPublished", mock.Anything, mock.Anything)
 }

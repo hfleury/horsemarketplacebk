@@ -29,11 +29,17 @@ type ProductService interface {
 	FindSimilar(ctx context.Context, id string, limit int) ([]*models.Product, error)
 }
 
+// ListingPublishedNotifier is told when a listing becomes visible to buyers.
+type ListingPublishedNotifier interface {
+	NotifyListingPublished(ctx context.Context, productID string) error
+}
+
 type ProductServiceImp struct {
 	repo            repositories.ProductRepository
 	settingsRepo    system.SettingsRepository
 	logger          config.Logging
 	geocodingClient geocoding.Client
+	publishNotifier ListingPublishedNotifier
 }
 
 func NewProductService(repo repositories.ProductRepository, settingsRepo system.SettingsRepository, logger config.Logging, geocodingClient geocoding.Client) *ProductServiceImp {
@@ -43,6 +49,10 @@ func NewProductService(repo repositories.ProductRepository, settingsRepo system.
 		logger:          logger,
 		geocodingClient: geocodingClient,
 	}
+}
+
+func (s *ProductServiceImp) SetPublishNotifier(notifier ListingPublishedNotifier) {
+	s.publishNotifier = notifier
 }
 
 func (s *ProductServiceImp) Create(ctx context.Context, product *models.Product) (*models.Product, error) {
@@ -70,7 +80,25 @@ func (s *ProductServiceImp) Create(ctx context.Context, product *models.Product)
 		s.geocodeProductLocation(ctx, product)
 	}
 
-	return s.repo.Create(ctx, product)
+	created, err := s.repo.Create(ctx, product)
+	if err != nil {
+		return nil, err
+	}
+
+	s.notifyIfNewlyPublished(ctx, "", created.Status, created.ID.String())
+	return created, nil
+}
+
+// notifyIfNewlyPublished is a best-effort side effect of publishing. A
+// notification failure is logged and swallowed — the status change has
+// already been saved and must not be reported as failed.
+func (s *ProductServiceImp) notifyIfNewlyPublished(ctx context.Context, previousStatus, newStatus models.ProductStatus, productID string) {
+	if s.publishNotifier == nil || newStatus != models.StatusPublished || previousStatus == models.StatusPublished {
+		return
+	}
+	if err := s.publishNotifier.NotifyListingPublished(ctx, productID); err != nil {
+		s.logger.Log(ctx, config.ErrorLevel, "Failed to notify that a listing was published", map[string]any{"error": err.Error(), "productId": productID})
+	}
 }
 
 // geocodeProductLocation is a best-effort fallback for when the frontend
@@ -156,7 +184,12 @@ func (s *ProductServiceImp) UpdateStatus(ctx context.Context, id string, status 
 		// But valid transitions are allowed.
 	}
 
-	return s.repo.UpdateStatus(ctx, id, status)
+	if err := s.repo.UpdateStatus(ctx, id, status); err != nil {
+		return err
+	}
+
+	s.notifyIfNewlyPublished(ctx, p.Status, status, id)
+	return nil
 }
 
 func (s *ProductServiceImp) Delete(ctx context.Context, id string, userID string, isAdmin bool) error {

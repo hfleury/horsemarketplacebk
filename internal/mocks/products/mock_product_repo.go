@@ -59,6 +59,11 @@ func (m *MockProductRepo) SearchByFilter(ctx context.Context, categoryID, query 
 	return args.Get(0).([]*models.Product), args.Int(1), args.Error(2)
 }
 
+func (m *MockProductRepo) MatchesFilter(ctx context.Context, productID, categoryID, query string, horseFilter *models.HorseFilter, locationFilter *models.LocationFilter) (bool, error) {
+	args := m.Called(ctx, productID, categoryID, query, horseFilter, locationFilter)
+	return args.Bool(0), args.Error(1)
+}
+
 func (m *MockProductRepo) FindSimilar(ctx context.Context, source *models.Product, limit int) ([]*models.Product, error) {
 	args := m.Called(ctx, source, limit)
 	if args.Get(0) == nil {

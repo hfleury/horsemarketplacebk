@@ -44,3 +44,24 @@ func (m *MockSavedSearchRepository) CountByUserID(ctx context.Context, userID uu
 	args := m.Called(ctx, userID)
 	return args.Int(0), args.Error(1)
 }
+
+func (m *MockSavedSearchRepository) ListAlertSubscriptions(ctx context.Context, excludeUserID uuid.UUID) ([]models.AlertSubscription, error) {
+	args := m.Called(ctx, excludeUserID)
+	subscriptions, _ := args.Get(0).([]models.AlertSubscription)
+	return subscriptions, args.Error(1)
+}
+
+func (m *MockSavedSearchRepository) ClaimAlert(ctx context.Context, savedSearchID, productID uuid.UUID) (bool, error) {
+	args := m.Called(ctx, savedSearchID, productID)
+	return args.Bool(0), args.Error(1)
+}
+
+func (m *MockSavedSearchRepository) ReleaseAlert(ctx context.Context, savedSearchID, productID uuid.UUID) error {
+	args := m.Called(ctx, savedSearchID, productID)
+	return args.Error(0)
+}
+
+func (m *MockSavedSearchRepository) MarkNotified(ctx context.Context, savedSearchID uuid.UUID) error {
+	args := m.Called(ctx, savedSearchID)
+	return args.Error(0)
+}

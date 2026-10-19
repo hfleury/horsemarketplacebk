@@ -24,6 +24,7 @@ type ProductRepository interface {
 	FindByCategory(ctx context.Context, categoryID string, page, limit int) (items []*models.Product, total int, err error)
 	FindByField(ctx context.Context, fieldName string, value string) ([]*models.Product, error)
 	SearchByFilter(ctx context.Context, categoryID, query string, filter *models.HorseFilter, locationFilter *models.LocationFilter, page, limit int) (items []*models.Product, total int, err error)
+	MatchesFilter(ctx context.Context, productID, categoryID, query string, filter *models.HorseFilter, locationFilter *models.LocationFilter) (bool, error)
 	FindSimilar(ctx context.Context, source *models.Product, limit int) ([]*models.Product, error)
 	FindMediaByProductID(ctx context.Context, productID string) ([]models.ProductMedia, error)
 	CountFavoritesByProductID(ctx context.Context, productID string) (int, error)
@@ -441,11 +442,12 @@ func (r *ProductRepoPsql) FindByField(ctx context.Context, fieldName string, val
 	return products, nil
 }
 
-func (r *ProductRepoPsql) SearchByFilter(ctx context.Context, categoryID, query string, filter *models.HorseFilter, locationFilter *models.LocationFilter, page, limit int) ([]*models.Product, int, error) {
-	offset := (page - 1) * limit
-
+// buildSearchConditions translates browse criteria into SQL conditions over
+// the `p` (products) and `h` (product_horses) aliases. Placeholders continue
+// numbering after the given args, so callers can pre-seed their own
+// parameters (e.g. a product ID as $1).
+func buildSearchConditions(args []any, categoryID, query string, filter *models.HorseFilter, locationFilter *models.LocationFilter) ([]string, []any) {
 	var conditions []string
-	var args []any
 
 	addCondition := func(clause string, value any) {
 		args = append(args, value)
@@ -496,6 +498,13 @@ func (r *ProductRepoPsql) SearchByFilter(ctx context.Context, categoryID, query 
 			n-2, n-1, n,
 		))
 	}
+	return conditions, args
+}
+
+func (r *ProductRepoPsql) SearchByFilter(ctx context.Context, categoryID, query string, filter *models.HorseFilter, locationFilter *models.LocationFilter, page, limit int) ([]*models.Product, int, error) {
+	offset := (page - 1) * limit
+
+	conditions, args := buildSearchConditions(nil, categoryID, query, filter, locationFilter)
 
 	whereClause := ""
 	if len(conditions) > 0 {
@@ -527,6 +536,22 @@ func (r *ProductRepoPsql) SearchByFilter(ctx context.Context, categoryID, query 
 		products = append(products, p)
 	}
 	return products, total, nil
+}
+
+// MatchesFilter reports whether the published listing productID would be
+// returned by SearchByFilter for the given criteria.
+func (r *ProductRepoPsql) MatchesFilter(ctx context.Context, productID, categoryID, query string, filter *models.HorseFilter, locationFilter *models.LocationFilter) (bool, error) {
+	conditions, args := buildSearchConditions([]any{productID, models.StatusPublished}, categoryID, query, filter, locationFilter)
+	conditions = append([]string{"p.id = $1", "p.status = $2"}, conditions...)
+
+	matchQuery := "SELECT EXISTS (SELECT 1 FROM catalog.products p LEFT JOIN catalog.product_horses h ON p.id = h.product_id WHERE " +
+		strings.Join(conditions, " AND ") + ")"
+
+	var matches bool
+	if err := r.psql.QueryRow(ctx, matchQuery, args...).Scan(&matches); err != nil {
+		return false, err
+	}
+	return matches, nil
 }
 
 // similarPriceBandPercent/similarAgeBandYears bound how close a candidate's
