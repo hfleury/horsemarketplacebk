@@ -84,6 +84,8 @@ func TestLoginByEmailAndUsername(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NotNil(t, resp)
 	assert.Equal(t, email, resp.User.Email)
+	assert.Equal(t, uid.String(), resp.User.ID)
+	assert.Equal(t, "user", resp.User.Role)
 	assert.NotEmpty(t, resp.Token)
 
 	// Case B: login by username (no @)

@@ -65,7 +65,62 @@ func TestCreateUser_success(t *testing.T) {
 
 	assert.NoError(t, err, "No error expected")
 	assert.NotNil(t, rtnCreateUser, "Expected not to be nil")
-	assert.Equal(t, expectedUser, rtnCreateUser, "Expected user to match")
+	assert.Equal(t, &models.UserResponse{
+		ID:       userId.String(),
+		Username: *userRequest.Username,
+		Email:    *userRequest.Email,
+		Role:     "user",
+	}, rtnCreateUser, "Expected the safe user response")
+}
+
+func TestGetAllUsers_mapsToAdminUserResponses(t *testing.T) {
+	ctx := context.Background()
+	ctrl := gomock.NewController(t)
+
+	userId := uuid.New()
+	isActive := true
+	createdAt := time.Now()
+	passwordHash := "hash"
+	repoUser := &models.User{
+		Id:           &userId,
+		Username:     rtnStringPointer("admin-list"),
+		Email:        rtnStringPointer("list@test.com"),
+		PasswordHash: &passwordHash,
+		IsActive:     &isActive,
+		CreatedAt:    &createdAt,
+		Role:         rtnStringPointer("admin"),
+	}
+
+	mockUserRepo := mockrepositories.NewMockUserRepository(ctrl)
+	mockUserRepo.EXPECT().FindAll(ctx).Return([]*models.User{repoUser}, nil)
+
+	userService := NewUserService(mockUserRepo, mockconfig.NewMockLogging(ctrl), nil, nil)
+	users, err := userService.GetAllUsers(ctx)
+
+	assert.NoError(t, err)
+	assert.Equal(t, []*models.AdminUserResponse{{
+		ID:        &userId,
+		Username:  repoUser.Username,
+		Email:     repoUser.Email,
+		Role:      repoUser.Role,
+		IsActive:  &isActive,
+		CreatedAt: &createdAt,
+	}}, users)
+}
+
+func TestGetAllUsers_noUsersReturnsEmptySlice(t *testing.T) {
+	ctx := context.Background()
+	ctrl := gomock.NewController(t)
+
+	mockUserRepo := mockrepositories.NewMockUserRepository(ctrl)
+	mockUserRepo.EXPECT().FindAll(ctx).Return(nil, nil)
+
+	userService := NewUserService(mockUserRepo, mockconfig.NewMockLogging(ctrl), nil, nil)
+	users, err := userService.GetAllUsers(ctx)
+
+	assert.NoError(t, err)
+	assert.NotNil(t, users)
+	assert.Empty(t, users)
 }
 
 func TestCreateUser_fail_username_nil(t *testing.T) {

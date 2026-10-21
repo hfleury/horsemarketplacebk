@@ -10,7 +10,7 @@ type User struct {
 	Id           *uuid.UUID `json:"id"`
 	Username     *string    `json:"username"`
 	Email        *string    `json:"email"`
-	PasswordHash *string    `json:"password_hash"`
+	PasswordHash *string    `json:"-"`
 	IsActive     *bool      `json:"is_active"`
 	IsVerified   *bool      `json:"is_verified"`
 	LastLogin    *time.Time `json:"last_login"`
@@ -23,11 +23,6 @@ type UserCreateResquest struct {
 	Username     *string `json:"username"`
 	Email        *string `json:"email"`
 	PasswordHash *string `json:"password"`
-}
-
-type UserGetRequest struct {
-	Username *string `json:"username"`
-	Email    *string `json:"email"`
 }
 
 type UserLogin struct {

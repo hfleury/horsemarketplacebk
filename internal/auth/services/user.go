@@ -53,7 +53,7 @@ func (us *UserService) SetBackendURL(url string) {
 	us.backendURL = url
 }
 
-func (us *UserService) CreateUser(ctx context.Context, userRequest models.UserCreateResquest) (*models.User, error) {
+func (us *UserService) CreateUser(ctx context.Context, userRequest models.UserCreateResquest) (*models.UserResponse, error) {
 	user := models.User{}
 	// Normalize inputs: trim username and normalize email to lowercase
 	if userRequest.Username != nil {
@@ -167,11 +167,8 @@ func (us *UserService) CreateUser(ctx context.Context, userRequest models.UserCr
 			return "user"
 		}(), verifyLink)
 
-		// Log attempt to send verification email with token and link for debugging
 		us.logger.Log(ctx, config.InfoLevel, "attempting to send verification email", map[string]any{
-			"email":              *userCreated.Email,
-			"verification_token": verificationToken,
-			"verification_link":  verifyLink,
+			"email": *userCreated.Email,
 		})
 
 		if err := us.emailSender.Send(ctx, *userCreated.Email, "Verify your HorseMarketplace email", body); err != nil {
@@ -181,32 +178,7 @@ func (us *UserService) CreateUser(ctx context.Context, userRequest models.UserCr
 		}
 	}
 
-	return userCreated, nil
-}
-
-func (us *UserService) SelectUserByUsername(ctx context.Context, user *models.UserGetRequest) (*models.User, error) {
-	if user.Email == nil && user.Username == nil {
-		return nil, errors.New("either username or email must be provided")
-	}
-
-	var modelUser *models.User
-	var err error
-
-	if user.Username != nil {
-		modelUser = &models.User{Username: user.Username}
-		modelUser, err = us.userRepo.SelectUserByUsername(ctx, modelUser)
-		if err != nil {
-			return nil, fmt.Errorf("error retrieving user by username: %w", err)
-		}
-	} else if user.Email != nil {
-		modelUser = &models.User{Email: user.Email}
-		modelUser, err = us.userRepo.SelectUserByEmail(ctx, modelUser)
-		if err != nil {
-			return nil, fmt.Errorf("error retrieving user by email: %w", err)
-		}
-	}
-
-	return modelUser, nil
+	return models.NewUserResponse(userCreated), nil
 }
 
 func (us *UserService) validatePassword(password string) error {
@@ -327,14 +299,9 @@ func (us *UserService) Login(ctx context.Context, userLogin models.UserLogin) (*
 		return nil, err
 	}
 
-	// Build response
 	loginResponse := &models.LoginResponse{
-		Token: accessToken,
-		User: models.UserResponse{
-			Username: *user.Username,
-			Email:    *user.Email,
-			Role:     role,
-		},
+		Token:            accessToken,
+		User:             *models.NewUserResponse(user),
 		ExpiresAt:        time.Now().Add(accessTTL).Format(time.RFC3339),
 		RefreshToken:     refreshToken,
 		RefreshExpiresAt: refreshExpiry.Format(time.RFC3339),
@@ -503,7 +470,7 @@ func (us *UserService) ResendVerification(ctx context.Context, email string) err
 		return "user"
 	}(), verifyLink)
 
-	us.logger.Log(ctx, config.InfoLevel, "attempting to send verification email (resend)", map[string]any{"email": email, "verification_token": verificationToken, "verification_link": verifyLink})
+	us.logger.Log(ctx, config.InfoLevel, "attempting to send verification email (resend)", map[string]any{"email": email})
 
 	if err := us.emailSender.Send(ctx, email, "Verify your HorseMarketplace email", body); err != nil {
 		us.logger.Log(ctx, config.ErrorLevel, "failed to send verification email (resend)", map[string]any{"error": err.Error(), "email": email})
@@ -514,8 +481,17 @@ func (us *UserService) ResendVerification(ctx context.Context, email string) err
 	return nil
 }
 
-func (us *UserService) GetAllUsers(ctx context.Context) ([]*models.User, error) {
-	return us.userRepo.FindAll(ctx)
+func (us *UserService) GetAllUsers(ctx context.Context) ([]*models.AdminUserResponse, error) {
+	users, err := us.userRepo.FindAll(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	adminUsers := make([]*models.AdminUserResponse, 0, len(users))
+	for _, user := range users {
+		adminUsers = append(adminUsers, models.NewAdminUserResponse(user))
+	}
+	return adminUsers, nil
 }
 
 func (us *UserService) UpdateUserStatus(ctx context.Context, id string, isActive bool) error {

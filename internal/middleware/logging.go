@@ -30,7 +30,7 @@ func LoggerMiddleware(logger *config.ZerologService) gin.HandlerFunc {
 			c.Request.Body = io.NopCloser(bytes.NewBuffer(body))
 		}
 
-		c.Set("request_body", string(body))
+		c.Set("request_body", config.RedactRequestBody(body))
 
 		// Process the request
 		c.Next()
