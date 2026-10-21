@@ -4,9 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strconv"
 
 	"github.com/hfleury/horsemarketplacebk/config"
+	"github.com/hfleury/horsemarketplacebk/internal/common"
 	"github.com/hfleury/horsemarketplacebk/internal/email"
 	productmodels "github.com/hfleury/horsemarketplacebk/internal/products/models"
 	"github.com/hfleury/horsemarketplacebk/internal/savedsearches/models"
@@ -102,7 +102,7 @@ func buildAlertEmail(product *productmodels.Product, subscription models.AlertSu
 	body = fmt.Sprintf(
 		"%s\n\nA new listing matches your saved search %q.\n\n%s\nPrice: %s\n\nView the listing: %s/listings/%s\n\nManage your alerts: %s/saved-searches",
 		alertGreeting(subscription.Username), subscription.Search.Name,
-		product.Title, formatPriceSEK(product.PriceSEK),
+		product.Title, common.FormatPriceSEK(product.PriceSEK),
 		frontendURL, product.ID, frontendURL,
 	)
 	return subject, body
@@ -113,11 +113,4 @@ func alertGreeting(username string) string {
 		return "Hi,"
 	}
 	return fmt.Sprintf("Hi %s,", username)
-}
-
-func formatPriceSEK(price *float64) string {
-	if price == nil {
-		return "Price on request"
-	}
-	return strconv.FormatFloat(*price, 'f', -1, 64) + " SEK"
 }
