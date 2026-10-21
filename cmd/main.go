@@ -19,6 +19,8 @@ import (
 	"github.com/hfleury/horsemarketplacebk/internal/analytics"
 	authRepos "github.com/hfleury/horsemarketplacebk/internal/auth/repositories"
 	"github.com/hfleury/horsemarketplacebk/internal/auth/services"
+	boostTierRepos "github.com/hfleury/horsemarketplacebk/internal/boosttiers/repositories"
+	boostTierServices "github.com/hfleury/horsemarketplacebk/internal/boosttiers/services"
 	callbackRequestRepos "github.com/hfleury/horsemarketplacebk/internal/callbacks/repositories"
 	callbackRequestServices "github.com/hfleury/horsemarketplacebk/internal/callbacks/services"
 	categoryRepos "github.com/hfleury/horsemarketplacebk/internal/categories/repositories"
@@ -134,6 +136,7 @@ func initializeApp(ctx context.Context, configService config.Configuration, newD
 	callbackRequestRepo := callbackRequestRepos.NewCallbackRequestRepoPsql(db, logger)
 	favoriteRepo := favoriteRepos.NewFavoriteRepoPsql(db, logger)
 	savedSearchRepo := savedSearchRepos.NewSavedSearchRepoPsql(db, logger)
+	boostTierRepo := boostTierRepos.NewBoostTierRepoPsql(db, logger)
 
 	frontendURL := configService.GetConfig().Frontend.URL
 
@@ -149,6 +152,7 @@ func initializeApp(ctx context.Context, configService config.Configuration, newD
 	callbackRequestService := callbackRequestServices.NewCallbackRequestService(callbackRequestRepo, productRepo, userRepo, logger)
 	favoriteService := favoriteServices.NewFavoriteService(favoriteRepo, productRepo, logger)
 	savedSearchService := savedSearchServices.NewSavedSearchService(savedSearchRepo, logger)
+	boostTierService := boostTierServices.NewBoostTierService(boostTierRepo, logger)
 
 	// Handlers
 	productHandler := productHandlers.NewProductHandler(productService, logger)
@@ -240,7 +244,7 @@ func initializeApp(ctx context.Context, configService config.Configuration, newD
 	server.Use(sentrygin.New(sentrygin.Options{Repanic: true}))
 
 	// routes
-	server = router.SetupRouter(server, logger, userService, tokenService, categoryService, mediaService, productService, productHandler, horseAttributeService, geocodingHandler, reportService, messagingService, callbackRequestService, favoriteService, savedSearchService)
+	server = router.SetupRouter(server, logger, userService, tokenService, categoryService, mediaService, productService, productHandler, horseAttributeService, geocodingHandler, reportService, messagingService, callbackRequestService, favoriteService, savedSearchService, boostTierService)
 
 	return newHTTPServer(server), newResourceReleaser(asynqServer, asynqClient, analyticsClient, db, logger), nil
 }

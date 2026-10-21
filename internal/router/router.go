@@ -4,6 +4,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/hfleury/horsemarketplacebk/config"
 	"github.com/hfleury/horsemarketplacebk/internal/auth/services"
+	boostTierServices "github.com/hfleury/horsemarketplacebk/internal/boosttiers/services"
 	callbackRequestServices "github.com/hfleury/horsemarketplacebk/internal/callbacks/services"
 	categoryServices "github.com/hfleury/horsemarketplacebk/internal/categories/services"
 	favoriteServices "github.com/hfleury/horsemarketplacebk/internal/favorites/services"
@@ -18,7 +19,7 @@ import (
 	savedSearchServices "github.com/hfleury/horsemarketplacebk/internal/savedsearches/services"
 )
 
-func SetupRouter(router *gin.Engine, logger config.Logging, userService *services.UserService, tokenService *services.TokenService, categoryService *categoryServices.CategoryService, mediaService *media.MediaService, productService productServices.ProductService, productHandler *productHandlers.ProductHandler, horseAttributeService *horseAttributeServices.HorseAttributeService, geocodingHandler *geocoding.GeocodingHandler, reportService *reportServices.ReportService, messagingService *messagingServices.MessagingService, callbackRequestService *callbackRequestServices.CallbackRequestService, favoriteService *favoriteServices.FavoriteService, savedSearchService *savedSearchServices.SavedSearchService) *gin.Engine {
+func SetupRouter(router *gin.Engine, logger config.Logging, userService *services.UserService, tokenService *services.TokenService, categoryService *categoryServices.CategoryService, mediaService *media.MediaService, productService productServices.ProductService, productHandler *productHandlers.ProductHandler, horseAttributeService *horseAttributeServices.HorseAttributeService, geocodingHandler *geocoding.GeocodingHandler, reportService *reportServices.ReportService, messagingService *messagingServices.MessagingService, callbackRequestService *callbackRequestServices.CallbackRequestService, favoriteService *favoriteServices.FavoriteService, savedSearchService *savedSearchServices.SavedSearchService, boostTierService *boostTierServices.BoostTierService) *gin.Engine {
 	registerUserRoutes(router, logger, userService, tokenService)
 	registerCategoryRoutes(router, logger, categoryService, tokenService)
 	registerMediaRoutes(router, logger, mediaService, tokenService)
@@ -29,6 +30,7 @@ func SetupRouter(router *gin.Engine, logger config.Logging, userService *service
 	registerCallbackRequestRoutes(router, logger, callbackRequestService, tokenService)
 	registerFavoriteRoutes(router, logger, favoriteService, tokenService)
 	registerSavedSearchRoutes(router, logger, savedSearchService, tokenService)
+	registerBoostTierRoutes(router, logger, boostTierService, tokenService)
 	registerGeocodingRoutes(router, geocodingHandler)
 
 	return router
