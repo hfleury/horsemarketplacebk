@@ -9,6 +9,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/hfleury/horsemarketplacebk/config"
+	"github.com/hfleury/horsemarketplacebk/internal/analytics"
 	"github.com/hfleury/horsemarketplacebk/internal/savedsearches/models"
 	"github.com/hfleury/horsemarketplacebk/internal/savedsearches/repositories"
 )
@@ -30,15 +31,21 @@ const (
 )
 
 type SavedSearchService struct {
-	repo   repositories.SavedSearchRepository
-	logger config.Logging
+	repo    repositories.SavedSearchRepository
+	logger  config.Logging
+	tracker analytics.Tracker
 }
 
 func NewSavedSearchService(repo repositories.SavedSearchRepository, logger config.Logging) *SavedSearchService {
 	return &SavedSearchService{
-		repo:   repo,
-		logger: logger,
+		repo:    repo,
+		logger:  logger,
+		tracker: analytics.NoopClient{},
 	}
+}
+
+func (s *SavedSearchService) SetTracker(tracker analytics.Tracker) {
+	s.tracker = tracker
 }
 
 func (s *SavedSearchService) Create(ctx context.Context, userID string, req models.SavedSearchRequest) (*models.SavedSearch, error) {
@@ -63,7 +70,24 @@ func (s *SavedSearchService) Create(ctx context.Context, userID string, req mode
 	if err := s.repo.Create(ctx, savedSearch); err != nil {
 		return nil, err
 	}
+
+	s.trackSavedSearchCreated(ctx, savedSearch)
 	return savedSearch, nil
+}
+
+func (s *SavedSearchService) trackSavedSearchCreated(ctx context.Context, savedSearch *models.SavedSearch) {
+	properties := map[string]any{
+		"saved_search_id": savedSearch.ID.String(),
+		"alerts_enabled":  savedSearch.AlertsEnabled,
+	}
+	if savedSearch.Criteria.CategoryID != nil {
+		properties["category_id"] = *savedSearch.Criteria.CategoryID
+	}
+	s.tracker.Track(ctx, analytics.Event{
+		Name:       analytics.EventSavedSearchCreated,
+		DistinctID: savedSearch.UserID.String(),
+		Properties: properties,
+	})
 }
 
 func (s *SavedSearchService) List(ctx context.Context, userID string) ([]models.SavedSearch, error) {

@@ -87,6 +87,8 @@ jobs:
             BACKEND_URL=${{ secrets.BACKEND_URL }}
             REDIS_ADDR=redis:6379
             SENTRY_DSN=${{ secrets.SENTRY_DSN }}
+            POSTHOG_API_KEY=${{ secrets.POSTHOG_API_KEY }}
+            POSTHOG_HOST=https://eu.i.posthog.com
             ENVFILE
             echo "${{ secrets.GHCR_READ_TOKEN }}" | docker login ghcr.io -u ${{ github.repository_owner }} --password-stdin
             cd /opt/horsemarketplace

@@ -8,6 +8,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/hfleury/horsemarketplacebk/config"
+	"github.com/hfleury/horsemarketplacebk/internal/analytics"
 	authRepositories "github.com/hfleury/horsemarketplacebk/internal/auth/repositories"
 	"github.com/hfleury/horsemarketplacebk/internal/callbacks/models"
 	"github.com/hfleury/horsemarketplacebk/internal/callbacks/repositories"
@@ -29,6 +30,7 @@ type CallbackRequestService struct {
 	userRepo    authRepositories.UserRepository
 	emailSender email.Sender
 	logger      config.Logging
+	tracker     analytics.Tracker
 }
 
 func NewCallbackRequestService(repo repositories.CallbackRequestRepository, productRepo productRepositories.ProductRepository, userRepo authRepositories.UserRepository, logger config.Logging) *CallbackRequestService {
@@ -37,6 +39,7 @@ func NewCallbackRequestService(repo repositories.CallbackRequestRepository, prod
 		productRepo: productRepo,
 		userRepo:    userRepo,
 		logger:      logger,
+		tracker:     analytics.NoopClient{},
 	}
 }
 
@@ -44,6 +47,10 @@ func NewCallbackRequestService(repo repositories.CallbackRequestRepository, prod
 // changing existing constructor call sites.
 func (s *CallbackRequestService) SetEmailSender(sender email.Sender) {
 	s.emailSender = sender
+}
+
+func (s *CallbackRequestService) SetTracker(tracker analytics.Tracker) {
+	s.tracker = tracker
 }
 
 func (s *CallbackRequestService) Submit(ctx context.Context, req models.CreateCallbackRequestRequest, buyerUserID string) (*models.CallbackRequest, error) {
@@ -80,6 +87,11 @@ func (s *CallbackRequestService) Submit(ctx context.Context, req models.CreateCa
 	}
 
 	s.notifySeller(ctx, product.UserID, created)
+	s.tracker.Track(ctx, analytics.Event{
+		Name:       analytics.EventCallbackRequested,
+		DistinctID: buyerUserID,
+		Properties: product.AnalyticsProperties(),
+	})
 
 	return created, nil
 }

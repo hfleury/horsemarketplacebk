@@ -8,6 +8,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/hfleury/horsemarketplacebk/config"
+	"github.com/hfleury/horsemarketplacebk/internal/analytics"
 	authRepositories "github.com/hfleury/horsemarketplacebk/internal/auth/repositories"
 	"github.com/hfleury/horsemarketplacebk/internal/email"
 	"github.com/hfleury/horsemarketplacebk/internal/messaging/models"
@@ -31,6 +32,7 @@ type MessagingService struct {
 	logger           config.Logging
 	frontendURL      string
 	emailSender      email.Sender
+	tracker          analytics.Tracker
 }
 
 func NewMessagingService(conversationRepo repositories.ConversationRepository, messageRepo repositories.MessageRepository, productRepo productRepositories.ProductRepository, userRepo authRepositories.UserRepository, logger config.Logging, frontendURL string) *MessagingService {
@@ -41,6 +43,7 @@ func NewMessagingService(conversationRepo repositories.ConversationRepository, m
 		userRepo:         userRepo,
 		logger:           logger,
 		frontendURL:      frontendURL,
+		tracker:          analytics.NoopClient{},
 	}
 }
 
@@ -48,6 +51,10 @@ func NewMessagingService(conversationRepo repositories.ConversationRepository, m
 // changing existing constructor call sites.
 func (s *MessagingService) SetEmailSender(sender email.Sender) {
 	s.emailSender = sender
+}
+
+func (s *MessagingService) SetTracker(tracker analytics.Tracker) {
+	s.tracker = tracker
 }
 
 func (s *MessagingService) CreateConversation(ctx context.Context, req models.CreateConversationRequest, buyerUserID string) (*models.Conversation, error) {
@@ -83,7 +90,17 @@ func (s *MessagingService) CreateConversation(ctx context.Context, req models.Cr
 		SellerID:  product.UserID,
 	}
 
-	return s.conversationRepo.Create(ctx, conversation)
+	created, err := s.conversationRepo.Create(ctx, conversation)
+	if err != nil {
+		return nil, err
+	}
+
+	s.tracker.Track(ctx, analytics.Event{
+		Name:       analytics.EventConversationStarted,
+		DistinctID: buyerUserID,
+		Properties: product.AnalyticsProperties(),
+	})
+	return created, nil
 }
 
 func (s *MessagingService) SendMessage(ctx context.Context, conversationID string, req models.SendMessageRequest, senderUserID string) (*models.MessageResponse, error) {
@@ -121,6 +138,7 @@ func (s *MessagingService) SendMessage(ctx context.Context, conversationID strin
 	}
 
 	s.notifyRecipient(ctx, conversation, senderUserID)
+	s.trackMessageSent(ctx, conversation, senderUserID)
 
 	return &models.MessageResponse{
 		ID:             created.ID,
@@ -130,6 +148,22 @@ func (s *MessagingService) SendMessage(ctx context.Context, conversationID strin
 		CreatedAt:      created.CreatedAt,
 		IsMine:         true,
 	}, nil
+}
+
+func (s *MessagingService) trackMessageSent(ctx context.Context, conversation *models.Conversation, senderUserID string) {
+	senderRole := "seller"
+	if senderUserID == conversation.BuyerID.String() {
+		senderRole = "buyer"
+	}
+	s.tracker.Track(ctx, analytics.Event{
+		Name:       analytics.EventMessageSent,
+		DistinctID: senderUserID,
+		Properties: map[string]any{
+			"conversation_id": conversation.ID.String(),
+			"listing_id":      conversation.ProductID.String(),
+			"sender_role":     senderRole,
+		},
+	})
 }
 
 func (s *MessagingService) notifyRecipient(ctx context.Context, conversation *models.Conversation, senderUserID string) {

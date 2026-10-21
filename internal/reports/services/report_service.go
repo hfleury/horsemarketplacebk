@@ -6,6 +6,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/hfleury/horsemarketplacebk/config"
+	"github.com/hfleury/horsemarketplacebk/internal/analytics"
 	productRepositories "github.com/hfleury/horsemarketplacebk/internal/products/repositories"
 	"github.com/hfleury/horsemarketplacebk/internal/reports/models"
 	"github.com/hfleury/horsemarketplacebk/internal/reports/repositories"
@@ -37,6 +38,7 @@ type ReportService struct {
 	repo        repositories.ReportRepository
 	productRepo productRepositories.ProductRepository
 	logger      config.Logging
+	tracker     analytics.Tracker
 }
 
 func NewReportService(repo repositories.ReportRepository, productRepo productRepositories.ProductRepository, logger config.Logging) *ReportService {
@@ -44,7 +46,12 @@ func NewReportService(repo repositories.ReportRepository, productRepo productRep
 		repo:        repo,
 		productRepo: productRepo,
 		logger:      logger,
+		tracker:     analytics.NoopClient{},
 	}
+}
+
+func (s *ReportService) SetTracker(tracker analytics.Tracker) {
+	s.tracker = tracker
 }
 
 func (s *ReportService) Submit(ctx context.Context, req models.CreateReportRequest, reporterUserID string) (*models.Report, error) {
@@ -77,7 +84,20 @@ func (s *ReportService) Submit(ctx context.Context, req models.CreateReportReque
 		Status:         models.StatusPending,
 	}
 
-	return s.repo.Create(ctx, report)
+	created, err := s.repo.Create(ctx, report)
+	if err != nil {
+		return nil, err
+	}
+
+	s.tracker.Track(ctx, analytics.Event{
+		Name:       analytics.EventListingReported,
+		DistinctID: reporterUserID,
+		Properties: map[string]any{
+			"listing_id": product.ID.String(),
+			"reason":     req.Reason,
+		},
+	})
+	return created, nil
 }
 
 func (s *ReportService) ListReports(ctx context.Context, status string) ([]*models.Report, error) {

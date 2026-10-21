@@ -13,6 +13,7 @@ type VipperService struct {
 func NewVipperService() *VipperService {
 	viper.AutomaticEnv()
 	viper.SetDefault("environment", "development")
+	viper.SetDefault("POSTHOG_HOST", "https://eu.i.posthog.com")
 	return &VipperService{
 		Config: &AllConfiguration{},
 	}
@@ -54,10 +55,14 @@ func (vs *VipperService) LoadConfiguration() {
 	// must work when clicked outside the app, not just relative API paths.
 	vs.Config.Backend.URL = viper.GetString("BACKEND_URL")
 
+	// Product analytics (PostHog EU); an empty key disables it
+	vs.Config.PostHog.APIKey = viper.GetString("POSTHOG_API_KEY")
+	vs.Config.PostHog.Host = viper.GetString("POSTHOG_HOST")
+
 	// Log only non-secret fields; the full struct holds PasetoKey/DB password/storage keys/SMTP password
 	log.Printf(
-		"Loaded configuration: Psql.Host=%s Psql.DdName=%s Env=%s Storage.Endpoint=%s Storage.BucketName=%s Frontend.URL=%s",
-		vs.Config.Psql.Host, vs.Config.Psql.DdName, vs.Config.Env, vs.Config.Storage.Endpoint, vs.Config.Storage.BucketName, vs.Config.Frontend.URL,
+		"Loaded configuration: Psql.Host=%s Psql.DdName=%s Env=%s Storage.Endpoint=%s Storage.BucketName=%s Frontend.URL=%s PostHog.Host=%s",
+		vs.Config.Psql.Host, vs.Config.Psql.DdName, vs.Config.Env, vs.Config.Storage.Endpoint, vs.Config.Storage.BucketName, vs.Config.Frontend.URL, vs.Config.PostHog.Host,
 	)
 
 	// Optionally, you can check if some values are missing or invalid
