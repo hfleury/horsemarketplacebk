@@ -26,7 +26,6 @@ func registerUserRoutes(router *gin.Engine, logger config.Logging, userService *
 			protected := authRoutes.Group("/")
 			protected.Use(authMiddleware.RequireAuth())
 			{
-				protected.GET("/users", userHandler.GetUserByUsername)
 				protected.POST("/logout", userHandler.Logout)
 			}
 		}

@@ -24,6 +24,7 @@ func (zs *ZerologService) Log(ctx context.Context, level LogLevel, msg string, f
 		traceID, _ = ctx.Value("traceID").(string)
 	}
 	function, line := zs.getCallerInfo()
+	fields = redactFields(fields)
 
 	event := zs.Logger.WithLevel(level.ToZerologLevel()).Str("trace_id", traceID).Str("function", function).Int("line", line)
 	for k, v := range fields {

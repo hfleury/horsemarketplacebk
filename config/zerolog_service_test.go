@@ -44,6 +44,22 @@ func TestZerologService_Log(t *testing.T) {
 	assert.Contains(t, cleanOutput, "key3=123", "Custom field key2 should be present in the log")
 }
 
+func TestZerologService_LogRedactsSensitiveFields(t *testing.T) {
+	var logBuffer bytes.Buffer
+	logger := zerolog.New(&logBuffer)
+	loggerService := &ZerologService{Logger: &logger}
+
+	loggerService.Log(context.Background(), InfoLevel, "login attempt", map[string]any{
+		"password": "hunter2!",
+		"email":    "e@example.com",
+	})
+
+	output := logBuffer.String()
+	assert.Contains(t, output, `"password":"[REDACTED]"`)
+	assert.Contains(t, output, "e@example.com")
+	assert.NotContains(t, output, "hunter2!")
+}
+
 // Helper function to remove ANSI escape codes from strings
 func stripANSI(input string) string {
 	re := regexp.MustCompile(`\x1b\[[0-9;]*[a-zA-Z]`)
