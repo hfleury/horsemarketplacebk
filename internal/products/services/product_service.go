@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/hfleury/horsemarketplacebk/config"
+	"github.com/hfleury/horsemarketplacebk/internal/analytics"
 	"github.com/hfleury/horsemarketplacebk/internal/geocoding"
 	"github.com/hfleury/horsemarketplacebk/internal/products/models"
 	"github.com/hfleury/horsemarketplacebk/internal/products/repositories"
@@ -40,6 +41,7 @@ type ProductServiceImp struct {
 	logger          config.Logging
 	geocodingClient geocoding.Client
 	publishNotifier ListingPublishedNotifier
+	tracker         analytics.Tracker
 }
 
 func NewProductService(repo repositories.ProductRepository, settingsRepo system.SettingsRepository, logger config.Logging, geocodingClient geocoding.Client) *ProductServiceImp {
@@ -48,11 +50,16 @@ func NewProductService(repo repositories.ProductRepository, settingsRepo system.
 		settingsRepo:    settingsRepo,
 		logger:          logger,
 		geocodingClient: geocodingClient,
+		tracker:         analytics.NoopClient{},
 	}
 }
 
 func (s *ProductServiceImp) SetPublishNotifier(notifier ListingPublishedNotifier) {
 	s.publishNotifier = notifier
+}
+
+func (s *ProductServiceImp) SetTracker(tracker analytics.Tracker) {
+	s.tracker = tracker
 }
 
 func (s *ProductServiceImp) Create(ctx context.Context, product *models.Product) (*models.Product, error) {
@@ -85,15 +92,40 @@ func (s *ProductServiceImp) Create(ctx context.Context, product *models.Product)
 		return nil, err
 	}
 
-	s.notifyIfNewlyPublished(ctx, "", created.Status, created.ID.String())
+	s.tracker.Track(ctx, analytics.Event{
+		Name:       analytics.EventListingCreated,
+		DistinctID: created.UserID.String(),
+		Properties: created.AnalyticsProperties(),
+	})
+	s.onListingStatusChanged(ctx, "", created, false)
 	return created, nil
 }
 
-// notifyIfNewlyPublished is a best-effort side effect of publishing. A
+// onListingStatusChanged runs the side effects of a listing becoming visible to
+// buyers. Every code path that changes a listing's status must call it.
+func (s *ProductServiceImp) onListingStatusChanged(ctx context.Context, previousStatus models.ProductStatus, product *models.Product, byAdmin bool) {
+	if product.Status != models.StatusPublished || previousStatus == models.StatusPublished {
+		return
+	}
+	s.trackListingPublished(ctx, product, byAdmin)
+	s.notifyListingPublished(ctx, product.ID.String())
+}
+
+func (s *ProductServiceImp) trackListingPublished(ctx context.Context, product *models.Product, byAdmin bool) {
+	properties := product.AnalyticsProperties()
+	properties["by_admin"] = byAdmin
+	s.tracker.Track(ctx, analytics.Event{
+		Name:       analytics.EventListingPublished,
+		DistinctID: product.UserID.String(),
+		Properties: properties,
+	})
+}
+
+// notifyListingPublished is a best-effort side effect of publishing. A
 // notification failure is logged and swallowed — the status change has
 // already been saved and must not be reported as failed.
-func (s *ProductServiceImp) notifyIfNewlyPublished(ctx context.Context, previousStatus, newStatus models.ProductStatus, productID string) {
-	if s.publishNotifier == nil || newStatus != models.StatusPublished || previousStatus == models.StatusPublished {
+func (s *ProductServiceImp) notifyListingPublished(ctx context.Context, productID string) {
+	if s.publishNotifier == nil {
 		return
 	}
 	if err := s.publishNotifier.NotifyListingPublished(ctx, productID); err != nil {
@@ -188,7 +220,9 @@ func (s *ProductServiceImp) UpdateStatus(ctx context.Context, id string, status 
 		return err
 	}
 
-	s.notifyIfNewlyPublished(ctx, p.Status, status, id)
+	updated := *p
+	updated.Status = status
+	s.onListingStatusChanged(ctx, p.Status, &updated, isAdmin)
 	return nil
 }
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"os/signal"
@@ -15,6 +16,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/hfleury/horsemarketplacebk/config"
+	"github.com/hfleury/horsemarketplacebk/internal/analytics"
 	authRepos "github.com/hfleury/horsemarketplacebk/internal/auth/repositories"
 	"github.com/hfleury/horsemarketplacebk/internal/auth/services"
 	callbackRequestRepos "github.com/hfleury/horsemarketplacebk/internal/callbacks/repositories"
@@ -77,13 +79,17 @@ func newHTTPServer(handler http.Handler) *http.Server {
 }
 
 // newResourceReleaser returns the func that stops background work once HTTP
-// has drained, so no request can still enqueue tasks or touch the DB.
-func newResourceReleaser(asynqServer *asynq.Server, asynqClient *asynq.Client, database *db.PsqlDB, logger *config.ZerologService) func() {
+// has drained, so no request can still enqueue tasks, track events or touch the DB.
+func newResourceReleaser(asynqServer *asynq.Server, asynqClient *asynq.Client, analyticsClient io.Closer, database *db.PsqlDB, logger *config.ZerologService) func() {
 	return func() {
 		logger.Logger.Info().Msg("Stopping Asynq worker")
 		asynqServer.Shutdown()
 		if err := asynqClient.Close(); err != nil {
 			logger.Logger.Error().Err(err).Msg("Error closing Asynq client")
+		}
+		logger.Logger.Info().Msg("Flushing analytics events")
+		if err := analyticsClient.Close(); err != nil {
+			logger.Logger.Error().Err(err).Msg("Error closing analytics client")
 		}
 		logger.Logger.Info().Msg("Closing database connection pool")
 		_ = database.Close() // Close logs its own error
@@ -172,6 +178,18 @@ func initializeApp(ctx context.Context, configService config.Configuration, newD
 	cfg := configService.GetConfig()
 	sender := newEmailSender(cfg)
 
+	analyticsClient, err := analytics.New(cfg.PostHog, logger)
+	if err != nil {
+		return nil, nil, err
+	}
+	userService.SetTracker(analyticsClient)
+	productService.SetTracker(analyticsClient)
+	messagingService.SetTracker(analyticsClient)
+	callbackRequestService.SetTracker(analyticsClient)
+	favoriteService.SetTracker(analyticsClient)
+	savedSearchService.SetTracker(analyticsClient)
+	reportService.SetTracker(analyticsClient)
+
 	// Start Asynq Worker Server
 	asynqServer := asynq.NewServer(
 		redisOpt,
@@ -224,7 +242,7 @@ func initializeApp(ctx context.Context, configService config.Configuration, newD
 	// routes
 	server = router.SetupRouter(server, logger, userService, tokenService, categoryService, mediaService, productService, productHandler, horseAttributeService, geocodingHandler, reportService, messagingService, callbackRequestService, favoriteService, savedSearchService)
 
-	return newHTTPServer(server), newResourceReleaser(asynqServer, asynqClient, db, logger), nil
+	return newHTTPServer(server), newResourceReleaser(asynqServer, asynqClient, analyticsClient, db, logger), nil
 }
 
 // newEmailSender picks the sender in order: SMTP config, Mailgun env, then

@@ -10,6 +10,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/hfleury/horsemarketplacebk/config"
+	"github.com/hfleury/horsemarketplacebk/internal/analytics"
 	"github.com/hfleury/horsemarketplacebk/internal/auth/models"
 	"github.com/hfleury/horsemarketplacebk/internal/auth/repositories"
 	"github.com/hfleury/horsemarketplacebk/internal/email"
@@ -24,6 +25,7 @@ type UserService struct {
 	emailSender    email.Sender
 	emailVerifRepo repositories.EmailVerificationRepository
 	backendURL     string
+	tracker        analytics.Tracker
 }
 
 func NewUserService(userRepo repositories.UserRepository, logger config.Logging, tokenService *TokenService, sessionRepo repositories.SessionRepository) *UserService {
@@ -32,6 +34,7 @@ func NewUserService(userRepo repositories.UserRepository, logger config.Logging,
 		logger:       logger,
 		tokenService: tokenService,
 		sessionRepo:  sessionRepo,
+		tracker:      analytics.NoopClient{},
 	}
 }
 
@@ -51,6 +54,10 @@ func (us *UserService) SetEmailVerificationRepo(r repositories.EmailVerification
 // Left unset, links fall back to a relative path — the prior behavior.
 func (us *UserService) SetBackendURL(url string) {
 	us.backendURL = url
+}
+
+func (us *UserService) SetTracker(tracker analytics.Tracker) {
+	us.tracker = tracker
 }
 
 func (us *UserService) CreateUser(ctx context.Context, userRequest models.UserCreateResquest) (*models.UserResponse, error) {
@@ -139,6 +146,8 @@ func (us *UserService) CreateUser(ctx context.Context, userRequest models.UserCr
 		})
 		return nil, err
 	}
+
+	us.tracker.Track(ctx, analytics.Event{Name: analytics.EventUserSignedUp, DistinctID: userCreated.Id.String()})
 
 	// If an email sender and verification repository are configured, persist a verification token and send the email.
 	if us.emailSender != nil && us.emailVerifRepo != nil && userCreated.Email != nil {
@@ -307,6 +316,12 @@ func (us *UserService) Login(ctx context.Context, userLogin models.UserLogin) (*
 		RefreshExpiresAt: refreshExpiry.Format(time.RFC3339),
 	}
 
+	us.tracker.Track(ctx, analytics.Event{
+		Name:       analytics.EventUserLoggedIn,
+		DistinctID: user.Id.String(),
+		Properties: map[string]any{"role": role},
+	})
+
 	return loginResponse, nil
 }
 
@@ -402,6 +417,7 @@ func (us *UserService) VerifyEmail(ctx context.Context, token string) error {
 			us.logger.Log(ctx, config.ErrorLevel, "failed to set user verified", map[string]any{"error": err.Error()})
 			return errors.New("failed to verify user")
 		}
+		us.tracker.Track(ctx, analytics.Event{Name: analytics.EventEmailVerified, DistinctID: ev.UserId.String()})
 	}
 
 	return nil

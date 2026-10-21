@@ -18,6 +18,12 @@ type AllConfiguration struct {
 	Mapbox    MapboxConfig   `mapstructure:"mapbox"`
 	Frontend  FrontendConfig `mapstructure:"frontend"`
 	Backend   BackendConfig  `mapstructure:"backend"`
+	PostHog   PostHogConfig  `mapstructure:"posthog"`
+}
+
+type PostHogConfig struct {
+	APIKey string `mapstructure:"posthog_api_key"`
+	Host   string `mapstructure:"posthog_host"`
 }
 
 type MapboxConfig struct {

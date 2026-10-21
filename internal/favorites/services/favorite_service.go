@@ -6,6 +6,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/hfleury/horsemarketplacebk/config"
+	"github.com/hfleury/horsemarketplacebk/internal/analytics"
 	"github.com/hfleury/horsemarketplacebk/internal/favorites/models"
 	"github.com/hfleury/horsemarketplacebk/internal/favorites/repositories"
 	productModels "github.com/hfleury/horsemarketplacebk/internal/products/models"
@@ -23,6 +24,7 @@ type FavoriteService struct {
 	repo        repositories.FavoriteRepository
 	productRepo productRepositories.ProductRepository
 	logger      config.Logging
+	tracker     analytics.Tracker
 }
 
 func NewFavoriteService(repo repositories.FavoriteRepository, productRepo productRepositories.ProductRepository, logger config.Logging) *FavoriteService {
@@ -30,7 +32,12 @@ func NewFavoriteService(repo repositories.FavoriteRepository, productRepo produc
 		repo:        repo,
 		productRepo: productRepo,
 		logger:      logger,
+		tracker:     analytics.NoopClient{},
 	}
+}
+
+func (s *FavoriteService) SetTracker(tracker analytics.Tracker) {
+	s.tracker = tracker
 }
 
 func (s *FavoriteService) Add(ctx context.Context, userID, productID string) (*models.FavoriteStatus, error) {
@@ -56,6 +63,12 @@ func (s *FavoriteService) Add(ctx context.Context, userID, productID string) (*m
 	if err := s.repo.Add(ctx, userUUID, productUUID); err != nil {
 		return nil, err
 	}
+
+	s.tracker.Track(ctx, analytics.Event{
+		Name:       analytics.EventFavoriteAdded,
+		DistinctID: userID,
+		Properties: product.AnalyticsProperties(),
+	})
 
 	return &models.FavoriteStatus{ProductID: productUUID, Favorited: true}, nil
 }
