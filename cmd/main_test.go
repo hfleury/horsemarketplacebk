@@ -209,3 +209,21 @@ func TestNewHTTPServer_SetsTimeouts(t *testing.T) {
 	assert.Equal(t, 90*time.Second, server.WriteTimeout)
 	assert.Equal(t, 120*time.Second, server.IdleTimeout)
 }
+
+func TestNewPaymentRegistry(t *testing.T) {
+	tests := []struct {
+		name   string
+		config config.PaymentsConfig
+		want   []string
+	}{
+		{name: "sandbox disabled", config: config.PaymentsConfig{SandboxSecret: "s3cret"}, want: []string{}},
+		{name: "sandbox enabled without a secret", config: config.PaymentsConfig{SandboxEnabled: true}, want: []string{}},
+		{name: "sandbox enabled with a secret", config: config.PaymentsConfig{SandboxEnabled: true, SandboxSecret: "s3cret"}, want: []string{"sandbox"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			registry := newPaymentRegistry(context.Background(), tt.config, config.NewZerologService())
+			assert.Equal(t, tt.want, registry.Codes())
+		})
+	}
+}

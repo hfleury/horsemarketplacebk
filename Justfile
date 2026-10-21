@@ -89,6 +89,8 @@ run-local:
     export ENVIRONMENT="development" && \
     export REDIS_ADDR="$(minikube ip):30008" && \
     export FRONTEND_URL="http://localhost:5173" && \
+    export PAYMENT_SANDBOX_ENABLED="true" && \
+    export PAYMENT_SANDBOX_SECRET="local-sandbox-secret" && \
     go run cmd/main.go
 
 # Port forward PostgreSQL for local development (alternative to NodePort)
@@ -130,3 +132,11 @@ migrate-create NAME:
 backfill-geocode:
     @echo "Backfilling geocoded coordinates for existing listings..."
     go run ./cmd/backfillgeocode
+
+# Play the sandbox payment provider: send a payment event to the webhook.
+# Usage: just payment-sandbox-event sbx_<payment_id> paid   (or failed / refunded)
+payment-sandbox-event REFERENCE OUTCOME:
+    curl -sS -X POST "${BACKEND_URL:-http://localhost:8080}/api/v1/payments/webhooks/sandbox" \
+        -H "Content-Type: application/json" \
+        -H "X-Sandbox-Secret: ${PAYMENT_SANDBOX_SECRET:-local-sandbox-secret}" \
+        -d '{"reference": "{{REFERENCE}}", "outcome": "{{OUTCOME}}"}'

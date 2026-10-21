@@ -28,5 +28,8 @@ data:
   MAPBOX_API_KEY: ""
   # PostHog (empty disables analytics)
   POSTHOG_API_KEY: ""
+  # Payments (sandbox provider, dev only)
+  PAYMENT_SANDBOX_ENABLED: "true"
+  PAYMENT_SANDBOX_SECRET: "local-sandbox-secret"
   # Redis
   REDIS_ADDR: "redis-service:6379"

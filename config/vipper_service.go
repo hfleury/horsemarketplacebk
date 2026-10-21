@@ -48,6 +48,10 @@ func (vs *VipperService) LoadConfiguration() {
 	// Mapbox geocoding
 	vs.Config.Mapbox.APIKey = viper.GetString("MAPBOX_API_KEY")
 
+	// Payment providers; the sandbox is test-only and off unless enabled
+	vs.Config.Payments.SandboxEnabled = viper.GetBool("PAYMENT_SANDBOX_ENABLED")
+	vs.Config.Payments.SandboxSecret = viper.GetString("PAYMENT_SANDBOX_SECRET")
+
 	// Frontend
 	vs.Config.Frontend.URL = viper.GetString("FRONTEND_URL")
 
@@ -61,8 +65,8 @@ func (vs *VipperService) LoadConfiguration() {
 
 	// Log only non-secret fields; the full struct holds PasetoKey/DB password/storage keys/SMTP password
 	log.Printf(
-		"Loaded configuration: Psql.Host=%s Psql.DdName=%s Env=%s Storage.Endpoint=%s Storage.BucketName=%s Frontend.URL=%s PostHog.Host=%s",
-		vs.Config.Psql.Host, vs.Config.Psql.DdName, vs.Config.Env, vs.Config.Storage.Endpoint, vs.Config.Storage.BucketName, vs.Config.Frontend.URL, vs.Config.PostHog.Host,
+		"Loaded configuration: Psql.Host=%s Psql.DdName=%s Env=%s Storage.Endpoint=%s Storage.BucketName=%s Frontend.URL=%s PostHog.Host=%s Payments.SandboxEnabled=%t",
+		vs.Config.Psql.Host, vs.Config.Psql.DdName, vs.Config.Env, vs.Config.Storage.Endpoint, vs.Config.Storage.BucketName, vs.Config.Frontend.URL, vs.Config.PostHog.Host, vs.Config.Payments.SandboxEnabled,
 	)
 
 	// Optionally, you can check if some values are missing or invalid

@@ -19,11 +19,19 @@ type AllConfiguration struct {
 	Frontend  FrontendConfig `mapstructure:"frontend"`
 	Backend   BackendConfig  `mapstructure:"backend"`
 	PostHog   PostHogConfig  `mapstructure:"posthog"`
+	Payments  PaymentsConfig `mapstructure:"payments"`
 }
 
 type PostHogConfig struct {
 	APIKey string `mapstructure:"posthog_api_key"`
 	Host   string `mapstructure:"posthog_host"`
+}
+
+// PaymentsConfig enables payment providers. The sandbox is for dev and
+// testing only and is never configured in production.
+type PaymentsConfig struct {
+	SandboxEnabled bool   `mapstructure:"payment_sandbox_enabled"`
+	SandboxSecret  string `mapstructure:"payment_sandbox_secret"`
 }
 
 type MapboxConfig struct {

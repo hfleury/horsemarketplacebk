@@ -37,6 +37,9 @@ import (
 	messagingServices "github.com/hfleury/horsemarketplacebk/internal/messaging/services"
 	"github.com/hfleury/horsemarketplacebk/internal/middleware"
 	mockemail "github.com/hfleury/horsemarketplacebk/internal/mocks/email"
+	"github.com/hfleury/horsemarketplacebk/internal/payments/providers"
+	paymentRepos "github.com/hfleury/horsemarketplacebk/internal/payments/repositories"
+	paymentServices "github.com/hfleury/horsemarketplacebk/internal/payments/services"
 	productHandlers "github.com/hfleury/horsemarketplacebk/internal/products/handlers"
 	productRepos "github.com/hfleury/horsemarketplacebk/internal/products/repositories"
 	productServices "github.com/hfleury/horsemarketplacebk/internal/products/services"
@@ -137,6 +140,7 @@ func initializeApp(ctx context.Context, configService config.Configuration, newD
 	favoriteRepo := favoriteRepos.NewFavoriteRepoPsql(db, logger)
 	savedSearchRepo := savedSearchRepos.NewSavedSearchRepoPsql(db, logger)
 	boostTierRepo := boostTierRepos.NewBoostTierRepoPsql(db, logger)
+	paymentRepo := paymentRepos.NewPaymentRepoPsql(db, logger)
 
 	frontendURL := configService.GetConfig().Frontend.URL
 
@@ -181,6 +185,7 @@ func initializeApp(ctx context.Context, configService config.Configuration, newD
 
 	cfg := configService.GetConfig()
 	sender := newEmailSender(cfg)
+	paymentService := paymentServices.NewPaymentService(paymentRepo, productRepo, boostTierRepo, newPaymentRegistry(ctx, cfg.Payments, logger), userRepo, frontendURL, logger, time.Now)
 
 	analyticsClient, err := analytics.New(cfg.PostHog, logger)
 	if err != nil {
@@ -193,6 +198,7 @@ func initializeApp(ctx context.Context, configService config.Configuration, newD
 	favoriteService.SetTracker(analyticsClient)
 	savedSearchService.SetTracker(analyticsClient)
 	reportService.SetTracker(analyticsClient)
+	paymentService.SetTracker(analyticsClient)
 
 	// Start Asynq Worker Server
 	asynqServer := asynq.NewServer(
@@ -228,6 +234,7 @@ func initializeApp(ctx context.Context, configService config.Configuration, newD
 	userService.SetEmailSender(sender)
 	messagingService.SetEmailSender(sender)
 	callbackRequestService.SetEmailSender(sender)
+	paymentService.SetEmailSender(sender)
 
 	// Create the Gin router and add middleware
 	server := gin.New()
@@ -244,7 +251,7 @@ func initializeApp(ctx context.Context, configService config.Configuration, newD
 	server.Use(sentrygin.New(sentrygin.Options{Repanic: true}))
 
 	// routes
-	server = router.SetupRouter(server, logger, userService, tokenService, categoryService, mediaService, productService, productHandler, horseAttributeService, geocodingHandler, reportService, messagingService, callbackRequestService, favoriteService, savedSearchService, boostTierService)
+	server = router.SetupRouter(server, logger, userService, tokenService, categoryService, mediaService, productService, productHandler, horseAttributeService, geocodingHandler, reportService, messagingService, callbackRequestService, favoriteService, savedSearchService, boostTierService, paymentService)
 
 	return newHTTPServer(server), newResourceReleaser(asynqServer, asynqClient, analyticsClient, db, logger), nil
 }
@@ -266,6 +273,19 @@ func newEmailSender(cfg *config.AllConfiguration) email.Sender {
 	}
 
 	return mockemail.NewMockSender()
+}
+
+// newPaymentRegistry registers the test-only sandbox provider only when it is
+// enabled and has a secret, so production gets no provider by default.
+func newPaymentRegistry(ctx context.Context, paymentsConfig config.PaymentsConfig, logger config.Logging) *providers.Registry {
+	if !paymentsConfig.SandboxEnabled {
+		return providers.NewRegistry()
+	}
+	if paymentsConfig.SandboxSecret == "" {
+		logger.Log(ctx, config.WarnLevel, "PAYMENT_SANDBOX_ENABLED is set without PAYMENT_SANDBOX_SECRET; sandbox payments stay disabled", nil)
+		return providers.NewRegistry()
+	}
+	return providers.NewRegistry(providers.NewSandboxProvider(paymentsConfig.SandboxSecret))
 }
 
 type Launcher struct {

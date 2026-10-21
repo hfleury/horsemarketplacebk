@@ -19,6 +19,7 @@ const (
 	EventFavoriteAdded       = "favorite_added"
 	EventSavedSearchCreated  = "saved_search_created"
 	EventListingReported     = "listing_reported"
+	EventBoostPaid           = "boost_paid"
 )
 
 // Event is one business action performed by the user identified by DistinctID.
