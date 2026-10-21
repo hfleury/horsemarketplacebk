@@ -266,6 +266,37 @@ func (h *ProductHandler) UpdateStatus(c *gin.Context) {
 	c.JSON(http.StatusOK, common.NewSuccessResponse("Product status updated"))
 }
 
+func (h *ProductHandler) Update(c *gin.Context) {
+	id := c.Param("id")
+	var changes models.Product
+	if err := c.ShouldBindJSON(&changes); err != nil {
+		h.logger.Log(c.Request.Context(), config.WarnLevel, "Invalid product update payload", map[string]any{"error": err.Error(), "id": id})
+		c.JSON(http.StatusBadRequest, common.NewErrorResponse("Invalid payload"))
+		return
+	}
+
+	userID, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, common.NewErrorResponse("Unauthorized"))
+		return
+	}
+	role, _ := c.Get("role")
+	isAdmin := role == "admin"
+
+	updated, err := h.service.Update(c.Request.Context(), id, &changes, userID.(string), isAdmin)
+	switch {
+	case errors.Is(err, services.ErrUnauthorized):
+		c.JSON(http.StatusForbidden, common.NewErrorResponse(err.Error()))
+	case errors.Is(err, services.ErrProductNotFound):
+		c.JSON(http.StatusNotFound, common.NewErrorResponse(err.Error()))
+	case err != nil:
+		h.logger.Log(c.Request.Context(), config.ErrorLevel, "Failed to update product", map[string]any{"error": err.Error(), "id": id})
+		c.JSON(http.StatusInternalServerError, common.NewErrorResponse("Failed to update product"))
+	default:
+		c.JSON(http.StatusOK, common.NewSuccessResponse(updated))
+	}
+}
+
 func (h *ProductHandler) Delete(c *gin.Context) {
 	id := c.Param("id")
 	userIDStr, _ := c.Get("user_id")
