@@ -32,7 +32,7 @@ type ProductRepository interface {
 	UpdateStatus(ctx context.Context, id string, status models.ProductStatus) error
 	IncrementViewCount(ctx context.Context, id string) error
 	Delete(ctx context.Context, id string) error
-	// Add Update method later as it's complex
+	Update(ctx context.Context, product *models.Product) error
 }
 
 type ProductRepoPsql struct {
@@ -127,6 +127,92 @@ func (r *ProductRepoPsql) insertSpecificData(ctx context.Context, tx *sql.Tx, p 
 		// For other types like Service, we might only use the main table for now
 		return nil
 	}
+}
+
+func (r *ProductRepoPsql) Update(ctx context.Context, product *models.Product) error {
+	tx, err := r.psql.BeginTransaction(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	query := `
+		UPDATE catalog.products SET
+			title = $1, price_sek = $2, description = $3, city = $4, area = $5,
+			transaction_type = $6, latitude = $7, longitude = $8, status = $9, updated_at = NOW()
+		WHERE id = $10
+	`
+	_, err = tx.ExecContext(ctx, query,
+		product.Title, product.PriceSEK, product.Description, product.City, product.Area,
+		product.TransactionType, product.Latitude, product.Longitude, product.Status, product.ID,
+	)
+	if err != nil {
+		r.logger.Log(ctx, config.ErrorLevel, "Failed to update product", map[string]any{"error": err.Error()})
+		return err
+	}
+
+	if err := r.upsertSpecificData(ctx, tx, product); err != nil {
+		r.logger.Log(ctx, config.ErrorLevel, "Failed to upsert specific product data", map[string]any{"error": err.Error(), "type": product.Type})
+		return err
+	}
+
+	return tx.Commit()
+}
+
+// upsertSpecificData writes the per-type row for an edited listing. A listing
+// created without its sub-object has no row yet, hence the upsert.
+func (r *ProductRepoPsql) upsertSpecificData(ctx context.Context, tx *sql.Tx, p *models.Product) error {
+	switch p.Type {
+	case models.TypeHorse:
+		return upsertHorse(ctx, tx, p.ID, p.Horse)
+	case models.TypeVehicle:
+		return upsertVehicle(ctx, tx, p.ID, p.Vehicle)
+	case models.TypeEquipment:
+		return upsertEquipment(ctx, tx, p.ID, p.Equipment)
+	default:
+		return nil
+	}
+}
+
+// upsertHorse leaves pedigree untouched: the listing form never edits it.
+func upsertHorse(ctx context.Context, tx *sql.Tx, productID uuid.UUID, h *models.Horse) error {
+	if h == nil {
+		return nil
+	}
+	q := `INSERT INTO catalog.product_horses (product_id, name, age, year_of_birth, gender, height, breed, color, dressage_level, jump_level, orientation)
+	      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+	      ON CONFLICT (product_id) DO UPDATE SET
+	          name = EXCLUDED.name, age = EXCLUDED.age, year_of_birth = EXCLUDED.year_of_birth,
+	          gender = EXCLUDED.gender, height = EXCLUDED.height, breed = EXCLUDED.breed, color = EXCLUDED.color,
+	          dressage_level = EXCLUDED.dressage_level, jump_level = EXCLUDED.jump_level, orientation = EXCLUDED.orientation`
+	_, err := tx.ExecContext(ctx, q, productID, h.Name, h.Age, h.YearOfBirth, h.Gender, h.Height, h.Breed, h.Color, h.DressageLevel, h.JumpLevel, h.Orientation)
+	return err
+}
+
+func upsertVehicle(ctx context.Context, tx *sql.Tx, productID uuid.UUID, v *models.Vehicle) error {
+	if v == nil {
+		return nil
+	}
+	q := `INSERT INTO catalog.product_vehicles (product_id, make, model, year, load_weight, total_weight, condition)
+	      VALUES ($1, $2, $3, $4, $5, $6, $7)
+	      ON CONFLICT (product_id) DO UPDATE SET
+	          make = EXCLUDED.make, model = EXCLUDED.model, year = EXCLUDED.year,
+	          load_weight = EXCLUDED.load_weight, total_weight = EXCLUDED.total_weight, condition = EXCLUDED.condition`
+	_, err := tx.ExecContext(ctx, q, productID, v.Make, v.Model, v.Year, v.LoadWeight, v.TotalWeight, v.Condition)
+	return err
+}
+
+func upsertEquipment(ctx context.Context, tx *sql.Tx, productID uuid.UUID, e *models.Equipment) error {
+	if e == nil {
+		return nil
+	}
+	q := `INSERT INTO catalog.product_equipment (product_id, make, model, size, condition, sub_type, boom_width)
+	      VALUES ($1, $2, $3, $4, $5, $6, $7)
+	      ON CONFLICT (product_id) DO UPDATE SET
+	          make = EXCLUDED.make, model = EXCLUDED.model, size = EXCLUDED.size,
+	          condition = EXCLUDED.condition, sub_type = EXCLUDED.sub_type, boom_width = EXCLUDED.boom_width`
+	_, err := tx.ExecContext(ctx, q, productID, e.Make, e.Model, e.Size, e.Condition, e.SubType, e.BoomWidth)
+	return err
 }
 
 // Base query to fetch all fields including joined specific tables

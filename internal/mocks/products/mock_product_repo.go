@@ -107,3 +107,8 @@ func (m *MockProductRepo) Delete(ctx context.Context, id string) error {
 	args := m.Called(ctx, id)
 	return args.Error(0)
 }
+
+func (m *MockProductRepo) Update(ctx context.Context, product *models.Product) error {
+	args := m.Called(ctx, product)
+	return args.Error(0)
+}

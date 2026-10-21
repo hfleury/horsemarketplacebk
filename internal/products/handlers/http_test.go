@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/gin-gonic/gin"
@@ -13,6 +14,7 @@ import (
 	media "github.com/hfleury/horsemarketplacebk/internal/media"
 	mockProducts "github.com/hfleury/horsemarketplacebk/internal/mocks/products"
 	"github.com/hfleury/horsemarketplacebk/internal/products/models"
+	"github.com/hfleury/horsemarketplacebk/internal/products/services"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 )
@@ -322,4 +324,86 @@ func TestGetSimilar_ServiceError(t *testing.T) {
 
 	assert.Equal(t, http.StatusInternalServerError, w.Code)
 	mockService.AssertExpectations(t)
+}
+
+func newUpdateRequestContext(w *httptest.ResponseRecorder, productID, body string) *gin.Context {
+	c, _ := gin.CreateTestContext(w)
+	c.Params = gin.Params{{Key: "id", Value: productID}}
+	c.Request = httptest.NewRequest("PUT", "/api/v1/products/"+productID, strings.NewReader(body))
+	c.Request.Header.Set("Content-Type", "application/json")
+	return c
+}
+
+func TestUpdate_Success_PassesContextIdentityAndReturnsListing(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	mockService := new(mockProducts.MockProductService)
+	handler := newTestProductHandler(mockService)
+
+	productID := uuid.New().String()
+	userID := uuid.New().String()
+	updated := &models.Product{Title: "Renamed Horse"}
+	mockService.On("Update", mock.Anything, productID, mock.MatchedBy(func(p *models.Product) bool {
+		return p.Title == "Renamed Horse"
+	}), userID, true).Return(updated, nil)
+
+	w := httptest.NewRecorder()
+	c := newUpdateRequestContext(w, productID, `{"title":"Renamed Horse"}`)
+	c.Set("user_id", userID)
+	c.Set("role", "admin")
+
+	handler.Update(c)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Contains(t, w.Body.String(), "Renamed Horse")
+	mockService.AssertExpectations(t)
+}
+
+func TestUpdate_MalformedJSON_Returns400(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	mockService := new(mockProducts.MockProductService)
+	handler := newTestProductHandler(mockService)
+
+	w := httptest.NewRecorder()
+	c := newUpdateRequestContext(w, uuid.New().String(), `{"title":`)
+	c.Set("user_id", uuid.New().String())
+
+	handler.Update(c)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	assert.Contains(t, w.Body.String(), "Invalid payload")
+	mockService.AssertNotCalled(t, "Update", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+}
+
+func TestUpdate_ServiceErrors_MapToStatus(t *testing.T) {
+	tests := []struct {
+		name         string
+		serviceErr   error
+		expectedCode int
+	}{
+		{name: "not the owner", serviceErr: services.ErrUnauthorized, expectedCode: http.StatusForbidden},
+		{name: "missing listing", serviceErr: services.ErrProductNotFound, expectedCode: http.StatusNotFound},
+		{name: "unexpected failure", serviceErr: errors.New("db error"), expectedCode: http.StatusInternalServerError},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gin.SetMode(gin.TestMode)
+			mockService := new(mockProducts.MockProductService)
+			handler := newTestProductHandler(mockService)
+
+			productID := uuid.New().String()
+			userID := uuid.New().String()
+			mockService.On("Update", mock.Anything, productID, mock.Anything, userID, false).Return(nil, tt.serviceErr)
+
+			w := httptest.NewRecorder()
+			c := newUpdateRequestContext(w, productID, `{"title":"Any"}`)
+			c.Set("user_id", userID)
+			c.Set("role", "user")
+
+			handler.Update(c)
+
+			assert.Equal(t, tt.expectedCode, w.Code)
+			mockService.AssertExpectations(t)
+		})
+	}
 }

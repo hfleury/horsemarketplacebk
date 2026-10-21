@@ -24,6 +24,7 @@ type ProductService interface {
 	FindByID(ctx context.Context, id string) (*models.Product, error)
 	FindAll(ctx context.Context, filters map[string]any, page, limit int) (*models.PaginatedProducts, error)
 	UpdateStatus(ctx context.Context, id string, status models.ProductStatus, userID string, isAdmin bool) error
+	Update(ctx context.Context, id string, changes *models.Product, userID string, isAdmin bool) (*models.Product, error)
 	Delete(ctx context.Context, id string, userID string, isAdmin bool) error
 	// Specific searches
 	Search(ctx context.Context, query string, categoryID string, fieldMap map[string]string, horseFilter *models.HorseFilter, locationFilter *models.LocationFilter, page, limit int) (*models.PaginatedProducts, error)
@@ -224,6 +225,94 @@ func (s *ProductServiceImp) UpdateStatus(ctx context.Context, id string, status 
 	updated.Status = status
 	s.onListingStatusChanged(ctx, p.Status, &updated, isAdmin)
 	return nil
+}
+
+func (s *ProductServiceImp) Update(ctx context.Context, id string, changes *models.Product, userID string, isAdmin bool) (*models.Product, error) {
+	existing, err := s.repo.FindByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if existing == nil || existing.Status == models.StatusDeleted {
+		return nil, ErrProductNotFound
+	}
+	if !isAdmin && existing.UserID.String() != userID {
+		return nil, ErrUnauthorized
+	}
+
+	updated := applyEditableFields(existing, changes)
+	if locationChanged(existing, updated) {
+		s.relocate(ctx, updated)
+	}
+	updated.Status = s.statusAfterEdit(ctx, existing.Status, isAdmin)
+
+	// onListingStatusChanged isn't needed: an edit never moves a listing into published.
+	if err := s.repo.Update(ctx, updated); err != nil {
+		return nil, err
+	}
+	return s.repo.FindByID(ctx, id)
+}
+
+// applyEditableFields returns a copy of existing with the seller-editable
+// fields taken from changes. Type, category, owner, views and status stay as
+// stored, and only the sub-object matching the stored type is accepted.
+func applyEditableFields(existing, changes *models.Product) *models.Product {
+	updated := *existing
+	updated.Title = changes.Title
+	updated.PriceSEK = changes.PriceSEK
+	updated.Description = changes.Description
+	updated.City = changes.City
+	updated.Area = changes.Area
+	updated.TransactionType = changes.TransactionType
+
+	switch existing.Type {
+	case models.TypeHorse:
+		if changes.Horse != nil {
+			updated.Horse = changes.Horse
+		}
+	case models.TypeVehicle:
+		if changes.Vehicle != nil {
+			updated.Vehicle = changes.Vehicle
+		}
+	case models.TypeEquipment:
+		if changes.Equipment != nil {
+			updated.Equipment = changes.Equipment
+		}
+	}
+	return &updated
+}
+
+func locationChanged(before, after *models.Product) bool {
+	return stringValue(before.City) != stringValue(after.City) || stringValue(before.Area) != stringValue(after.Area)
+}
+
+func stringValue(value *string) string {
+	if value == nil {
+		return ""
+	}
+	return *value
+}
+
+// relocate drops coordinates that no longer match the edited city/area and
+// geocodes the new location when there is a city to geocode.
+func (s *ProductServiceImp) relocate(ctx context.Context, product *models.Product) {
+	product.Latitude = nil
+	product.Longitude = nil
+	if stringValue(product.City) != "" {
+		s.geocodeProductLocation(ctx, product)
+	}
+}
+
+// statusAfterEdit sends a seller's edit of a live listing back for approval
+// when approval is required. A settings error fails safe to "required", as in Create.
+func (s *ProductServiceImp) statusAfterEdit(ctx context.Context, current models.ProductStatus, isAdmin bool) models.ProductStatus {
+	if current != models.StatusPublished || isAdmin {
+		return current
+	}
+	approvalRequired, err := s.settingsRepo.IsProductApprovalRequired(ctx)
+	if err != nil || approvalRequired {
+		return models.StatusPendingApproval
+	}
+	return current
 }
 
 func (s *ProductServiceImp) Delete(ctx context.Context, id string, userID string, isAdmin bool) error {

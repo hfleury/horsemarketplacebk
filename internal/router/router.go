@@ -52,6 +52,7 @@ func registerProductRoutes(router *gin.Engine, logger config.Logging, handler *p
 		protected := products.Use(authMiddleware.RequireAuth())
 		{
 			protected.POST("", handler.Create)
+			protected.PUT("/:id", handler.Update)
 			protected.DELETE("/:id", handler.Delete)
 			protected.PATCH("/:id/status", handler.UpdateStatus)
 		}
