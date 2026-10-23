@@ -153,6 +153,15 @@ func TestBuildSearchConditions(t *testing.T) {
 	}
 }
 
+func TestBoostedFirstOrderBy(t *testing.T) {
+	expected := " ORDER BY (p.status = 'published' AND EXISTS (SELECT 1 FROM catalog.product_boosts b" +
+		" JOIN catalog.payments pay ON pay.id = b.payment_id" +
+		" WHERE b.product_id = p.id AND pay.status = 'paid' AND b.starts_at <= NOW() AND b.expires_at > NOW()))" +
+		" DESC, p.created_at DESC, p.id DESC"
+
+	assert.Equal(t, expected, boostedFirstOrderBy)
+}
+
 func sprintfLocation(lngPlaceholder, latPlaceholder, radiusPlaceholder int) string {
 	return fmt.Sprintf(locationClause, lngPlaceholder, latPlaceholder, radiusPlaceholder)
 }

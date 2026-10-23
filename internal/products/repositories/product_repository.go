@@ -14,6 +14,7 @@ import (
 	categoriesmodels "github.com/hfleury/horsemarketplacebk/internal/categories/models"
 	"github.com/hfleury/horsemarketplacebk/internal/db"
 	media "github.com/hfleury/horsemarketplacebk/internal/media"
+	paymentmodels "github.com/hfleury/horsemarketplacebk/internal/payments/models"
 	"github.com/hfleury/horsemarketplacebk/internal/products/models"
 )
 
@@ -235,6 +236,20 @@ var selectFullProduct = `
 	LEFT JOIN catalog.product_services s ON p.id = s.product_id
 	LEFT JOIN catalog.product_properties pp ON p.id = pp.product_id
 `
+
+// hasLiveBoost is true for a published listing with a paid boost whose
+// [starts_at, expires_at) window covers now. EXISTS keeps one row per listing
+// even when several paid boosts overlap.
+var hasLiveBoost = fmt.Sprintf(
+	"(p.status = '%s' AND EXISTS (SELECT 1 FROM catalog.product_boosts b"+
+		" JOIN catalog.payments pay ON pay.id = b.payment_id"+
+		" WHERE b.product_id = p.id AND pay.status = '%s' AND b.starts_at <= NOW() AND b.expires_at > NOW()))",
+	models.StatusPublished, paymentmodels.StatusPaid,
+)
+
+// boostedFirstOrderBy is the browse order: live-boosted listings first, then
+// newest first, with id as a deterministic tiebreak for stable pagination.
+var boostedFirstOrderBy = " ORDER BY " + hasLiveBoost + " DESC, p.created_at DESC, p.id DESC"
 
 func (r *ProductRepoPsql) scanProduct(ctx context.Context, row interface{ Scan(...any) error }) (*models.Product, error) {
 	var p models.Product
@@ -509,7 +524,7 @@ func (r *ProductRepoPsql) FindByField(ctx context.Context, fieldName string, val
 		return nil, fmt.Errorf("search by %s not implemented", fieldName)
 	}
 
-	query := selectFullProduct + " WHERE " + whereClause + " ORDER BY p.created_at DESC"
+	query := selectFullProduct + " WHERE " + whereClause + boostedFirstOrderBy
 
 	rows, err := r.psql.Query(ctx, query, value)
 	if err != nil {
@@ -604,8 +619,8 @@ func (r *ProductRepoPsql) SearchByFilter(ctx context.Context, categoryID, query 
 	}
 
 	dataArgs := append(append([]any{}, args...), limit, offset)
-	dataQuery := selectFullProduct + whereClause +
-		fmt.Sprintf(" ORDER BY p.created_at DESC LIMIT $%d OFFSET $%d", len(dataArgs)-1, len(dataArgs))
+	dataQuery := selectFullProduct + whereClause + boostedFirstOrderBy +
+		fmt.Sprintf(" LIMIT $%d OFFSET $%d", len(dataArgs)-1, len(dataArgs))
 
 	rows, err := r.psql.Query(ctx, dataQuery, dataArgs...)
 	if err != nil {
